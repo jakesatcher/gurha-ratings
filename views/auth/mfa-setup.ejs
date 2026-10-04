@@ -1,0 +1,26 @@
+<%- include('../partials/head') %>
+<section class="auth">
+  <div class="card narrow">
+    <h1>Two-step verification</h1>
+    <% if (firstTime) { %>
+      <p>For security, every account uses a second step when signing in. Choose how you'd like to get your codes:</p>
+    <% } else { %>
+      <p>Current method: <strong><%= current === 'totp' ? 'Authenticator app' : current === 'email' ? 'Email codes' : 'Not set' %></strong>. Choose a new method:</p>
+    <% } %>
+    <div class="choice-list">
+      <a class="choice" href="/mfa/setup/totp">
+        <span class="choice-icon" aria-hidden="true">📱</span>
+        <span><strong>Authenticator app</strong><br><small class="muted">Google Authenticator, Microsoft Authenticator, Authy, 1Password… Most secure.</small></span>
+      </a>
+      <form method="post" action="/mfa/setup/email">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <button class="choice" type="submit">
+          <span class="choice-icon" aria-hidden="true">✉️</span>
+          <span><strong>Email codes</strong><br><small class="muted">We'll email you a 6-digit code each time you sign in.</small></span>
+        </button>
+      </form>
+    </div>
+    <% if (!firstTime) { %><p><a href="/account">Cancel</a></p><% } %>
+  </div>
+</section>
+<%- include('../partials/foot') %>

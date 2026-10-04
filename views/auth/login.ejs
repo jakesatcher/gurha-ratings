@@ -1,0 +1,19 @@
+<%- include('../partials/head') %>
+<section class="auth">
+  <div class="card narrow">
+    <h1>Sign in</h1>
+    <p class="muted">GURHA player rating system</p>
+    <% if (error) { %><div class="alert alert-error" role="alert"><%= error %></div><% } %>
+    <form method="post" action="/login" class="stack">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <label>Email <input type="email" name="email" value="<%= email %>" autocomplete="username" required autofocus></label>
+      <label>Password <input type="password" name="password" autocomplete="current-password" required></label>
+      <button class="btn btn-primary btn-block" type="submit">Continue</button>
+    </form>
+    <div class="auth-links">
+      <a href="/forgot">Forgot password?</a>
+      <a href="/register">Request access</a>
+    </div>
+  </div>
+</section>
+<%- include('../partials/foot') %>

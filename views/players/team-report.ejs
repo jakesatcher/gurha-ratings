@@ -1,0 +1,51 @@
+<%- include('../partials/head') %>
+<div class="page-head no-print">
+  <h1>Team summary</h1>
+</div>
+<form method="get" action="/reports/teams" class="filters no-print">
+  <div class="filter-row">
+    <select name="team" aria-label="Team" required>
+      <option value="">Choose a team…</option>
+      <% teams.forEach(function (t) { %><option <%= team === t ? 'selected' : '' %>><%= t %></option><% }) %>
+    </select>
+    <button class="btn" type="submit">Show</button>
+    <% if (team) { %><button class="btn" type="button" data-print>Print</button><% } %>
+  </div>
+</form>
+
+<% if (team) { %>
+<section class="card report">
+  <div class="report-head">
+    <h2>GURHA Recreational Hockey</h2>
+    <p class="report-sub">Team player rating &amp; division summary</p>
+    <dl class="dl dl-inline">
+      <dt>Date</dt><dd><%= fmtDate(new Date()) %></dd>
+      <dt>Team</dt><dd><%= team %></dd>
+      <dt>League / Division</dt><dd><%= division || '—' %></dd>
+    </dl>
+  </div>
+  <div class="table-wrap">
+  <table class="table">
+    <thead><tr><th>#</th><th>Jersey</th><th>Player name</th><th class="num">Final rating 0–11</th><th>GURHA level</th><th class="num">Raters</th></tr></thead>
+    <tbody>
+      <% players.forEach(function (p, i) { const s = summaries.get(p.id); %>
+        <tr>
+          <td><%= i + 1 %></td>
+          <td><%= p.jersey_number || '' %></td>
+          <td><a href="/players/<%= p.id %>"><%= p.first_name %> <%= p.last_name %></a><% if (s.needsReview) { %> <span class="tag tag-warn">3rd review</span><% } %></td>
+          <td class="num"><%= fmt(s.avgOverall) %></td>
+          <td><%- include('../partials/level', { level: s.level }) %><%= s.overridden ? ' *' : '' %></td>
+          <td class="num"><%= s.count %></td>
+        </tr>
+      <% }) %>
+    </tbody>
+  </table>
+  </div>
+  <p class="small muted">* Final level set by an admin. Final rating is the average weighted score across all raters.</p>
+  <h3>Individual GURHA rating scale</h3>
+  <div class="scale">
+    <% levels.LEVELS.forEach(function (l, i) { %><div><span class="muted small"><%= i %></span> <%- include('../partials/level', { level: l }) %></div><% }) %>
+  </div>
+</section>
+<% } %>
+<%- include('../partials/foot') %>

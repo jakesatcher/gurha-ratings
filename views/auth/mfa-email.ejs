@@ -1,0 +1,19 @@
+<%- include('../partials/head') %>
+<section class="auth">
+  <div class="card narrow">
+    <h1>Confirm your email</h1>
+    <p>We sent a 6-digit code to <strong><%= email %></strong>. Enter it to turn on email codes.</p>
+    <% if (error) { %><div class="alert alert-error" role="alert"><%= error %></div><% } %>
+    <form method="post" action="/mfa/setup/email/verify" class="stack">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <label>Code <input class="code-input" name="code" inputmode="numeric" pattern="[0-9 ]*" autocomplete="one-time-code" maxlength="7" required autofocus></label>
+      <button class="btn btn-primary btn-block" type="submit">Verify &amp; turn on</button>
+    </form>
+    <form method="post" action="/mfa/setup/email" class="auth-links">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <button class="linklike" type="submit">Resend code</button>
+      <a href="/mfa/setup">Choose a different method</a>
+    </form>
+  </div>
+</section>
+<%- include('../partials/foot') %>

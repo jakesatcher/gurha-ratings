@@ -1,0 +1,23 @@
+<%- include('../partials/head') %>
+<section class="auth">
+  <div class="card narrow">
+    <h1>Two-step verification</h1>
+    <% if (method === 'totp') { %>
+      <p>Enter the 6-digit code from your authenticator app.</p>
+    <% } else { %>
+      <p>We emailed a 6-digit code to <strong><%= email %></strong>. It expires in 10 minutes.</p>
+    <% } %>
+    <% if (error) { %><div class="alert alert-error" role="alert"><%= error %></div><% } %>
+    <form method="post" action="/mfa" class="stack">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <label>Code <input class="code-input" name="code" inputmode="numeric" pattern="[0-9 ]*" autocomplete="one-time-code" maxlength="7" required autofocus></label>
+      <button class="btn btn-primary btn-block" type="submit">Verify</button>
+    </form>
+    <form method="post" action="/mfa/email" class="auth-links">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <button class="linklike" type="submit"><%= method === 'totp' ? 'Email me a code instead' : 'Resend code' %></button>
+      <a href="/login">Start over</a>
+    </form>
+  </div>
+</section>
+<%- include('../partials/foot') %>

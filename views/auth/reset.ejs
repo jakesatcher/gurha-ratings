@@ -1,0 +1,14 @@
+<%- include('../partials/head') %>
+<section class="auth">
+  <div class="card narrow">
+    <h1>Choose a new password</h1>
+    <% if (error) { %><div class="alert alert-error" role="alert"><%= error %></div><% } %>
+    <form method="post" class="stack">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <label>New password <input type="password" name="password" autocomplete="new-password" minlength="10" required></label>
+      <label>Confirm password <input type="password" name="password_confirm" autocomplete="new-password" minlength="10" required></label>
+      <button class="btn btn-primary btn-block" type="submit">Save password</button>
+    </form>
+  </div>
+</section>
+<%- include('../partials/foot') %>

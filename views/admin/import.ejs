@@ -1,0 +1,43 @@
+<%- include('../partials/head') %>
+<h1>Import players</h1>
+<%- include('_nav') %>
+
+<% if (result) { %>
+  <div class="alert alert-success" role="status">
+    Import complete: <strong><%= result.created %></strong> created, <strong><%= result.updated %></strong> updated, <strong><%= result.skipped %></strong> skipped.
+    <% if (result.errors.length) { %><ul class="small"><% result.errors.slice(0, 50).forEach(function (e) { %><li><%= e %></li><% }) %></ul><% } %>
+    <p><a href="/admin/players">View players</a></p>
+  </div>
+<% } %>
+
+<div class="grid-2">
+  <section class="card">
+    <h2>Upload CSV or JSON</h2>
+    <form method="post" action="/admin/import" enctype="multipart/form-data" class="stack">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <label>File <input type="file" name="file" accept=".csv,.json,text/csv,application/json"></label>
+      <label>…or paste CSV / JSON <textarea name="pasted" rows="5" placeholder="first_name,last_name,jersey_number,team&#10;Wayne,Example,99,Blue Liners"></textarea></label>
+      <button class="btn btn-primary" type="submit">Import</button>
+    </form>
+    <p class="small"><a href="/admin/import/template.csv">Download CSV template</a></p>
+    <details class="small">
+      <summary>Accepted columns</summary>
+      <p><code>first_name</code>, <code>last_name</code> (or a single <code>name</code> column), <code>jersey_number</code>, <code>team</code>, <code>division</code>, <code>position</code> (F/D/G or Forward/Defense/Goalie), <code>age</code>, <code>email</code>, <code>external_id</code>, <code>notes</code>.</p>
+      <p>JSON may be an array of player objects, or <code>{ "players": [ … ] }</code>.</p>
+      <p>Existing players are matched by <code>external_id</code>, then by first + last name + team, and updated instead of duplicated.</p>
+    </details>
+  </section>
+  <section class="card">
+    <h2>SportsEngine</h2>
+    <% if (seConfigured) { %>
+      <p>Pull the current rosters from SportsEngine. Existing players are updated; nobody is deleted.</p>
+      <form method="post" action="/admin/sportsengine/sync" data-confirm="Sync rosters from SportsEngine now?">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <button class="btn btn-primary" type="submit">Sync from SportsEngine</button>
+      </form>
+    <% } else { %>
+      <p class="muted">Not configured. Set <code>SPORTSENGINE_CLIENT_ID</code>, <code>SPORTSENGINE_CLIENT_SECRET</code> and <code>SPORTSENGINE_ORG_ID</code> in Railway to enable roster sync.</p>
+    <% } %>
+  </section>
+</div>
+<%- include('../partials/foot') %>

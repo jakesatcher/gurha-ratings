@@ -1,0 +1,43 @@
+<%- include('../partials/head') %>
+<% const isNew = !player.id; %>
+<p class="crumbs"><a href="<%= isNew ? '/admin/players' : `/players/${player.id}` %>">← Back</a></p>
+<section class="card narrow-wide">
+  <h1><%= isNew ? 'Add player' : 'Edit player' %></h1>
+  <%- include('../partials/errors') %>
+  <form method="post" action="<%= isNew ? '/admin/players' : `/admin/players/${player.id}` %>" class="stack">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <div class="grid-2">
+      <label>First name <input name="first_name" value="<%= player.first_name || '' %>" required maxlength="100" autofocus></label>
+      <label>Last name <input name="last_name" value="<%= player.last_name || '' %>" required maxlength="100"></label>
+      <label>Jersey number <input name="jersey_number" value="<%= player.jersey_number || '' %>" inputmode="numeric" maxlength="10"></label>
+      <label>Position
+        <select name="position">
+          <option value="">—</option>
+          <option value="F" <%= player.position === 'F' ? 'selected' : '' %>>Forward</option>
+          <option value="D" <%= player.position === 'D' ? 'selected' : '' %>>Defense</option>
+          <option value="G" <%= player.position === 'G' ? 'selected' : '' %>>Goaltender</option>
+        </select></label>
+      <label>Team <input name="team" value="<%= player.team || '' %>" maxlength="100" list="team-options"></label>
+      <label>League / division <input name="division" value="<%= player.division || '' %>" maxlength="100"></label>
+      <label>Age <input name="age" type="number" min="1" max="119" value="<%= player.age || '' %>"></label>
+      <label>Email <input name="email" type="email" value="<%= player.email || '' %>" maxlength="200"></label>
+    </div>
+    <label>Notes <textarea name="notes" rows="2" maxlength="2000"><%= player.notes || '' %></textarea></label>
+    <% if (!isNew) { %>
+      <label class="check"><input type="checkbox" name="active" <%= player.active ? 'checked' : '' %>> Active (visible to raters)</label>
+      <% if (player.external_id) { %><p class="small muted">External ID: <%= player.external_id %> · source: <%= player.source %></p><% } %>
+    <% } %>
+    <div class="actions">
+      <button class="btn btn-primary" type="submit">Save</button>
+      <% if (isNew) { %><button class="btn" type="submit" name="add_another" value="1">Save &amp; add another</button><% } %>
+    </div>
+  </form>
+  <% if (!isNew) { %>
+    <hr>
+    <form method="post" action="/admin/players/<%= player.id %>/delete" data-confirm="Permanently delete this player AND all of their ratings? Consider unchecking Active instead.">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <button class="btn btn-danger btn-small" type="submit">Delete player</button>
+    </form>
+  <% } %>
+</section>
+<%- include('../partials/foot') %>

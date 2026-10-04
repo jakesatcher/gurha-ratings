@@ -1,0 +1,38 @@
+<%- include('../partials/head') %>
+<h1>My account</h1>
+<div class="grid-2">
+  <section class="card">
+    <h2>Profile</h2>
+    <dl class="dl">
+      <dt>Name</dt><dd><%= currentUser.name %></dd>
+      <dt>Email</dt><dd><%= currentUser.email %></dd>
+      <dt>Role</dt><dd><%= currentUser.role === 'admin' ? 'Admin' : 'Rater' %></dd>
+      <dt>Two-step</dt><dd><%= currentUser.mfa_method === 'totp' ? 'Authenticator app' : 'Email codes' %> · <a href="/mfa/setup">Change</a></dd>
+    </dl>
+  </section>
+  <section class="card">
+    <h2>Change password</h2>
+    <form method="post" action="/account/password" class="stack">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <label>Current password <input type="password" name="current_password" autocomplete="current-password" required></label>
+      <label>New password <input type="password" name="password" autocomplete="new-password" minlength="10" required></label>
+      <label>Confirm new password <input type="password" name="password_confirm" autocomplete="new-password" minlength="10" required></label>
+      <button class="btn" type="submit">Update password</button>
+    </form>
+  </section>
+</div>
+<section class="card">
+  <h2>My ratings (<%= myRatings.length %>)</h2>
+  <% if (!myRatings.length) { %>
+    <p class="muted">You haven't rated anyone yet. <a href="/players?status=unrated">Find players to rate</a>.</p>
+  <% } else { %>
+    <ul class="list">
+      <% myRatings.forEach(function (r) { %>
+        <li><a href="/players/<%= r.player_id %>"><%= r.first_name %> <%= r.last_name %></a>
+          <span class="muted"><%= r.team || '' %><%= r.jersey_number ? ` #${r.jersey_number}` : '' %> · <%= fmtDate(r.created_at) %></span>
+          <%- include('../partials/level', { level: r.final_level }) %></li>
+      <% }) %>
+    </ul>
+  <% } %>
+</section>
+<%- include('../partials/foot') %>

@@ -1,0 +1,120 @@
+<%- include('../partials/head') %>
+<% const isAdmin = currentUser.role === 'admin'; const posName = { F: 'Forward', D: 'Defense', G: 'Goaltender' }; %>
+<p class="crumbs"><a href="/players">← Players</a></p>
+
+<section class="card player-hero">
+  <div class="hero-main">
+    <div class="hero-jersey"><%= player.jersey_number ? '#' + player.jersey_number : '–' %></div>
+    <div>
+      <h1><%= player.first_name %> <%= player.last_name %>
+        <% if (!player.active) { %><span class="tag">inactive</span><% } %></h1>
+      <p class="muted"><%= [player.team, player.division, posName[player.position], player.age ? `Age ${player.age}` : null].filter(Boolean).join(' · ') || 'No team info' %></p>
+    </div>
+  </div>
+  <div class="hero-level">
+    <%- include('../partials/level', { level: summary.level, big: true }) %>
+    <div class="small muted">
+      <% if (summary.overridden) { %>Admin-set level<% } else if (summary.count) { %>Avg score <strong><%= fmt(summary.avgOverall) %></strong> / 11<% } else { %>No ratings yet<% } %>
+    </div>
+  </div>
+</section>
+
+<% if (summary.needsReview) { %>
+  <div class="alert alert-warn">⚠️ Raters' levels differ by <%= summary.levelSpread %> levels. Per GURHA guidelines this player should be flagged for a <strong>third review</strong>.</div>
+<% } %>
+
+<div class="actions">
+  <% if (myRating) { %>
+    <span class="rated-mark">✓ You rated this player on <%= fmtDate(myRating.created_at) %></span>
+  <% } else if (player.active) { %>
+    <a class="btn btn-primary" href="/players/<%= player.id %>/rate">Rate this player</a>
+  <% } %>
+  <% if (isAdmin) { %>
+    <a class="btn" href="/admin/players/<%= player.id %>/edit">Edit player</a>
+  <% } %>
+</div>
+
+<section class="card">
+  <h2>Average ratings <span class="muted small">(<%= summary.count %> rating<%= summary.count === 1 ? '' : 's' %>)</span></h2>
+  <% if (!summary.count) { %>
+    <p class="muted">No ratings submitted yet.</p>
+  <% } else { %>
+    <div class="bars">
+      <% categories.forEach(function (c) { const v = summary.categoryAverages[c.id]; %>
+        <div class="bar-row">
+          <div class="bar-label"><%= c.name %> <span class="muted small"><%= Number(c.weight) %>%</span></div>
+          <div class="bar-track" aria-hidden="true"><div class="bar-fill" style="--pct: <%= v === null ? 0 : Math.round((v - c.min_score) / (c.max_score - c.min_score) * 100) %>%"></div></div>
+          <div class="bar-value"><%= fmt(v, 1) %></div>
+        </div>
+      <% }) %>
+    </div>
+    <dl class="dl dl-inline">
+      <dt>Weighted overall</dt><dd><strong><%= fmt(summary.avgOverall) %></strong> / 11 → <%- include('../partials/level', { level: summary.calculatedLevel }) %></dd>
+      <dt>Raters' recommended</dt><dd><%- include('../partials/level', { level: summary.recommendedLevel }) %> <span class="muted small">(average of final recommended levels)</span></dd>
+      <% if (summary.overridden) { %>
+        <dt>Admin final level</dt><dd><%- include('../partials/level', { level: player.level_override }) %> <span class="muted small"><%= player.level_override_note || '' %></span></dd>
+      <% } %>
+    </dl>
+  <% } %>
+</section>
+
+<% if (isAdmin) { %>
+<section class="card">
+  <h2>Admin: final level override</h2>
+  <form method="post" action="/admin/players/<%= player.id %>/override" class="inline-form">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <select name="level_override" aria-label="Final level">
+      <option value="">— Use calculated level —</option>
+      <% levels.LEVELS.forEach(function (l) { %><option <%= player.level_override === l ? 'selected' : '' %>><%= l %></option><% }) %>
+    </select>
+    <input name="level_override_note" placeholder="Reason (optional)" value="<%= player.level_override_note || '' %>" maxlength="1000">
+    <button class="btn" type="submit">Save</button>
+  </form>
+</section>
+<% } %>
+
+<section>
+  <h2>Submitted ratings</h2>
+  <% if (!ratings.length) { %><p class="muted">None yet.</p><% } %>
+  <% ratings.forEach(function (r) { %>
+    <details class="card rating-card" id="rating-<%= r.id %>" <%= r.rater_id === currentUser.id ? 'open' : '' %>>
+      <summary>
+        <span><strong><%= r.display_name %></strong><%= r.rater_id === currentUser.id ? ' (you)' : '' %>
+          <span class="muted small">· <%= fmtDate(r.created_at) %><%= r.updated_by && r.updated_by !== r.rater_id ? ' · edited by admin' : '' %></span></span>
+        <span class="rating-summary-levels">
+          <span class="small muted"><%= fmt(r.overall) %></span>
+          <%- include('../partials/level', { level: r.effective_level }) %>
+        </span>
+      </summary>
+      <table class="table compact">
+        <thead><tr><th>Category</th><th class="num">Score</th><th>Comments</th></tr></thead>
+        <tbody>
+          <% categories.forEach(function (c) { const s = r.scoreMap[c.id]; %>
+            <tr><td><%= c.name %></td><td class="num"><%= s ? s.score : '—' %></td><td><%= s && s.comment ? s.comment : '' %></td></tr>
+          <% }) %>
+        </tbody>
+      </table>
+      <dl class="dl">
+        <dt>Calculated</dt><dd><%= fmt(r.overall) %> → <%= r.calculated_level || '—' %></dd>
+        <dt>Independent level</dt><dd><%= r.independent_level || '—' %></dd>
+        <dt>Game performance</dt><dd><%= r.game_performance ? r.game_performance[0].toUpperCase() + r.game_performance.slice(1) : '—' %><%= r.game_performance_note ? ` — ${r.game_performance_note}` : '' %></dd>
+        <% if (r.age_limited) { %><dt>Age limitation</dt><dd><%= r.age_areas.join(', ') %><%= r.age_comments ? ` — ${r.age_comments}` : '' %></dd><% } %>
+        <% if (r.injury || r.injury_affects.length) { %><dt>Injury</dt><dd><%= [r.injury, r.injury_affects.length ? `affects ${r.injury_affects.join(', ')}` : null, r.injury_temporary ? `temporary: ${r.injury_temporary}` : null, r.injury_normal_level ? `normal ${r.injury_normal_level}` : null, r.injury_current_level ? `current ${r.injury_current_level}` : null].filter(Boolean).join(' · ') %><%= r.injury_comments ? ` — ${r.injury_comments}` : '' %></dd><% } %>
+        <% if (r.evidence) { %><dt>Evidence</dt><dd class="pre"><%= r.evidence %></dd><% } %>
+        <% if (r.strengths) { %><dt>Strengths</dt><dd class="pre"><%= r.strengths %></dd><% } %>
+        <% if (r.improvements) { %><dt>To improve</dt><dd class="pre"><%= r.improvements %></dd><% } %>
+        <dt>Final recommended</dt><dd><%- include('../partials/level', { level: r.final_level }) %></dd>
+      </dl>
+      <% if (isAdmin) { %>
+        <div class="actions">
+          <a class="btn btn-small" href="/admin/ratings/<%= r.id %>/edit">Edit rating</a>
+          <form method="post" action="/admin/ratings/<%= r.id %>/delete" class="inline" data-confirm="Delete this rating? The rater will be able to submit a new one.">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <button class="btn btn-small btn-danger" type="submit">Delete</button>
+          </form>
+        </div>
+      <% } %>
+    </details>
+  <% }) %>
+</section>
+<%- include('../partials/foot') %>

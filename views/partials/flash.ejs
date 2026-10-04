@@ -1,0 +1,3 @@
+<% (flash || []).forEach(function (f) { %>
+  <div class="alert alert-<%= f.type %>" role="<%= f.type === 'error' ? 'alert' : 'status' %>"><%= f.message %></div>
+<% }) %>

@@ -1,0 +1,48 @@
+<%- include('../partials/head') %>
+<h1>Users</h1>
+<%- include('_nav') %>
+<% const btn = function (u, action, label, cls, confirm) { %>
+  <form method="post" action="/admin/users/<%= u.id %>/<%= action %>" class="inline" <% if (confirm) { %>data-confirm="<%= confirm %>"<% } %>>
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <button class="btn btn-small <%= cls || '' %>" type="submit"><%= label %></button>
+  </form>
+<% } %>
+<div class="user-list">
+<% users.forEach(function (u) { const self = u.id === currentUser.id; %>
+  <section class="card user-card status-<%= u.status %>">
+    <div class="user-head">
+      <div>
+        <strong><%= u.name %></strong><%= self ? ' (you)' : '' %>
+        <div class="muted small"><%= u.email %></div>
+      </div>
+      <div class="user-tags">
+        <span class="tag tag-<%= u.status %>"><%= u.status %></span>
+        <span class="tag"><%= u.role %></span>
+      </div>
+    </div>
+    <% if (u.request_note) { %><p class="small">“<%= u.request_note %>”</p><% } %>
+    <p class="small muted">
+      Requested <%= fmtDate(u.created_at) %>
+      <% if (u.approved_at) { %> · approved <%= fmtDate(u.approved_at) %><%= u.approved_by_name ? ` by ${u.approved_by_name}` : '' %><% } %>
+      · 2-step: <%= u.mfa_method === 'totp' ? 'authenticator' : u.mfa_method === 'email' ? 'email' : 'not set up' %>
+      · <%= u.rating_count %> rating<%= u.rating_count === 1 ? '' : 's' %>
+      <% if (u.last_login_at) { %> · last sign-in <%= fmtDate(u.last_login_at) %><% } %>
+    </p>
+    <div class="actions">
+      <% if (u.status === 'pending') { %>
+        <% btn(u, 'approve', 'Approve', 'btn-primary') %>
+        <% btn(u, 'reject', 'Reject', 'btn-danger', `Reject ${u.name}'s request?`) %>
+      <% } else if (u.status === 'rejected') { %>
+        <% btn(u, 'approve', 'Approve') %>
+      <% } else if (u.status === 'approved' && !self) { %>
+        <% if (u.role === 'rater') { btn(u, 'make-admin', 'Make admin', '', `Give ${u.name} admin permissions?`) } else { btn(u, 'make-rater', 'Make rater') } %>
+        <% btn(u, 'reset-mfa', 'Reset 2-step', '', `Reset two-step verification for ${u.name}? They'll set it up again at next sign-in.`) %>
+        <% btn(u, 'disable', 'Disable', 'btn-danger', `Disable ${u.name}? They'll be signed out immediately.`) %>
+      <% } else if (u.status === 'disabled') { %>
+        <% btn(u, 'enable', 'Re-enable') %>
+      <% } %>
+    </div>
+  </section>
+<% }) %>
+</div>
+<%- include('../partials/foot') %>

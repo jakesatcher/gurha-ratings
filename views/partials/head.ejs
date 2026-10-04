@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b1f3a">
+  <title><%= title ? `${title} · ${appName}` : appName %></title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/css/app.css">
+  <script src="/static/js/app.js" defer></script>
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="/"><span class="brand-mark" aria-hidden="true">🏒</span> GURHA <span class="brand-sub">Ratings</span></a>
+    <% if (currentUser) { %>
+    <nav class="nav" aria-label="Main">
+      <a href="/players" class="<%= path.startsWith('/players') ? 'active' : '' %>">Players</a>
+      <a href="/reports/teams" class="<%= path.startsWith('/reports') ? 'active' : '' %>">Teams</a>
+      <% if (currentUser.role === 'admin') { %>
+        <a href="/admin" class="<%= path.startsWith('/admin') ? 'active' : '' %>">Admin</a>
+      <% } %>
+      <a href="/account" class="<%= path.startsWith('/account') ? 'active' : '' %>">Account</a>
+      <form method="post" action="/logout" class="inline">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <button type="submit" class="linklike">Sign out</button>
+      </form>
+    </nav>
+    <% } %>
+  </div>
+</header>
+<main class="container">
+<%- include('flash') %>

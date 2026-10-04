@@ -1,0 +1,41 @@
+<%- include('../partials/head') %>
+<h1>Admin</h1>
+<%- include('_nav') %>
+<div class="stats">
+  <a class="stat <%= stats.pending ? 'stat-alert' : '' %>" href="/admin/users"><span class="stat-num"><%= stats.pending %></span><span>Pending requests</span></a>
+  <a class="stat" href="/admin/users"><span class="stat-num"><%= stats.users %></span><span>Active users</span></a>
+  <a class="stat" href="/players"><span class="stat-num"><%= stats.players %></span><span>Active players</span></a>
+  <a class="stat" href="/players?status=none"><span class="stat-num"><%= stats.unrated %></span><span>Players with no ratings</span></a>
+  <a class="stat" href="/players"><span class="stat-num"><%= stats.ratings %></span><span>Ratings submitted</span></a>
+  <a class="stat <%= flagged.length ? 'stat-warn' : '' %>" href="/players?status=review"><span class="stat-num"><%= flagged.length %></span><span>Need 3rd review</span></a>
+</div>
+
+<% if (Math.abs(weightTotal - 100) > 0.001) { %>
+  <div class="alert alert-warn">Active category weights add up to <strong><%= weightTotal %>%</strong>, not 100%. Overall scores are normalized by total weight, but you may want to <a href="/admin/categories">fix the weights</a>.</div>
+<% } %>
+<% if (!mailConfigured) { %>
+  <div class="alert alert-warn">Email isn't configured, so email codes are only printed to the server log. Set <code>RESEND_API_KEY</code> or <code>SMTP_*</code> variables before inviting raters.</div>
+<% } %>
+
+<div class="grid-2">
+  <section class="card">
+    <h2>Quick actions</h2>
+    <ul class="list">
+      <li><a href="/admin/players/new">Add a player</a></li>
+      <li><a href="/admin/import">Import players (CSV / JSON<%= seConfigured ? ' / SportsEngine' : '' %>)</a></li>
+      <li><a href="/reports/teams">Team summary reports</a></li>
+      <li><a href="/admin/export.csv">Download all ratings (CSV)</a></li>
+    </ul>
+  </section>
+  <section class="card">
+    <h2>Flagged for third review</h2>
+    <% if (!flagged.length) { %><p class="muted">No players flagged.</p><% } else { %>
+      <ul class="list">
+        <% flagged.forEach(function (p) { const s = summaries.get(p.id); %>
+          <li><a href="/players/<%= p.id %>"><%= p.first_name %> <%= p.last_name %></a> <span class="muted small"><%= p.team || '' %> · spread <%= s.levelSpread %> levels</span></li>
+        <% }) %>
+      </ul>
+    <% } %>
+  </section>
+</div>
+<%- include('../partials/foot') %>

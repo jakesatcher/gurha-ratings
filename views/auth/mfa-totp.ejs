@@ -1,0 +1,21 @@
+<%- include('../partials/head') %>
+<section class="auth">
+  <div class="card narrow">
+    <h1>Set up your authenticator</h1>
+    <ol class="steps">
+      <li>Open your authenticator app and add a new account.</li>
+      <li>Scan this QR code (or enter the key manually).</li>
+      <li>Enter the 6-digit code the app shows.</li>
+    </ol>
+    <div class="qr"><img src="<%= qr %>" alt="QR code for authenticator app" width="240" height="240"></div>
+    <p class="center"><small class="muted">Setup key</small><br><code class="secret"><%= secret %></code></p>
+    <% if (error) { %><div class="alert alert-error" role="alert"><%= error %></div><% } %>
+    <form method="post" action="/mfa/setup/totp" class="stack">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <label>Code <input class="code-input" name="code" inputmode="numeric" pattern="[0-9 ]*" autocomplete="one-time-code" maxlength="7" required></label>
+      <button class="btn btn-primary btn-block" type="submit">Verify &amp; turn on</button>
+    </form>
+    <p><a href="/mfa/setup">Choose a different method</a></p>
+  </div>
+</section>
+<%- include('../partials/foot') %>

@@ -1,0 +1,21 @@
+<%- include('../partials/head') %>
+<section class="auth">
+  <div class="card narrow">
+    <h1>Request rater access</h1>
+    <p class="muted">An admin must approve your request before you can sign in.</p>
+    <%- include('../partials/errors') %>
+    <form method="post" action="/register" class="stack">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <label>Full name <input name="name" value="<%= values.name || '' %>" autocomplete="name" required maxlength="100"></label>
+      <label>Email <input type="email" name="email" value="<%= values.email || '' %>" autocomplete="email" required></label>
+      <label>Password <input type="password" name="password" autocomplete="new-password" minlength="10" required>
+        <small class="muted">At least 10 characters.</small></label>
+      <label>Confirm password <input type="password" name="password_confirm" autocomplete="new-password" minlength="10" required></label>
+      <label>Note for the admin <small class="muted">(optional — e.g. your team or role)</small>
+        <textarea name="request_note" rows="2" maxlength="1000"><%= values.request_note || '' %></textarea></label>
+      <button class="btn btn-primary btn-block" type="submit">Submit request</button>
+    </form>
+    <div class="auth-links"><a href="/login">Already approved? Sign in</a></div>
+  </div>
+</section>
+<%- include('../partials/foot') %>

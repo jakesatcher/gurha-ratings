@@ -1,0 +1,66 @@
+<%- include('../partials/head') %>
+<div class="page-head">
+  <h1>Players</h1>
+  <% if (currentUser.role === 'admin') { %><a class="btn btn-small" href="/admin/players/new">+ Add player</a><% } %>
+</div>
+
+<form method="get" action="/players" class="filters" role="search">
+  <input type="search" name="q" value="<%= filters.q %>" placeholder="Search name, team or jersey #" aria-label="Search players" autocomplete="off" class="search">
+  <div class="filter-row">
+    <select name="team" aria-label="Team">
+      <option value="">All teams</option>
+      <% teams.forEach(function (t) { %><option <%= filters.team === t ? 'selected' : '' %>><%= t %></option><% }) %>
+    </select>
+    <select name="position" aria-label="Position">
+      <option value="">All positions</option>
+      <option value="F" <%= filters.position === 'F' ? 'selected' : '' %>>Forward</option>
+      <option value="D" <%= filters.position === 'D' ? 'selected' : '' %>>Defense</option>
+      <option value="G" <%= filters.position === 'G' ? 'selected' : '' %>>Goaltender</option>
+    </select>
+    <select name="status" aria-label="Status">
+      <option value="">Everyone</option>
+      <option value="unrated" <%= filters.status === 'unrated' ? 'selected' : '' %>>Not rated by me</option>
+      <option value="rated" <%= filters.status === 'rated' ? 'selected' : '' %>>Rated by me</option>
+      <option value="none" <%= filters.status === 'none' ? 'selected' : '' %>>No ratings yet</option>
+      <option value="review" <%= filters.status === 'review' ? 'selected' : '' %>>Needs 3rd review</option>
+    </select>
+    <select name="sort" aria-label="Sort">
+      <option value="name">Sort: Name</option>
+      <option value="rating" <%= filters.sort === 'rating' ? 'selected' : '' %>>Sort: Rating</option>
+    </select>
+    <button class="btn" type="submit">Search</button>
+  </div>
+</form>
+
+<p class="muted small"><%= players.length %> player<%= players.length === 1 ? '' : 's' %></p>
+
+<% if (!players.length) { %>
+  <div class="card center"><p>No players found.</p>
+    <% if (currentUser.role === 'admin') { %><p><a href="/admin/import">Import players</a> or <a href="/admin/players/new">add one</a>.</p><% } %>
+  </div>
+<% } else { %>
+  <ul class="player-list">
+    <% players.forEach(function (p) { const s = summaries.get(p.id); const rated = mine.has(p.id); %>
+      <li class="player-row">
+        <a class="player-link" href="/players/<%= p.id %>">
+          <span class="jersey"><%= p.jersey_number ? '#' + p.jersey_number : '–' %></span>
+          <span class="player-main">
+            <span class="player-name"><%= p.last_name %>, <%= p.first_name %>
+              <% if (!p.active) { %><span class="tag">inactive</span><% } %>
+              <% if (s.needsReview) { %><span class="tag tag-warn" title="Raters differ by 2+ levels">3rd review</span><% } %>
+            </span>
+            <span class="player-meta"><%= [p.team, p.position ? ({F:'Forward',D:'Defense',G:'Goalie'})[p.position] : null].filter(Boolean).join(' · ') || '—' %></span>
+            <span class="player-meta"><%= s.count ? fmt(s.avgOverall) + ' avg · ' + s.count + ' rating' + (s.count === 1 ? '' : 's') : 'No ratings yet' %></span>
+          </span>
+          <span class="player-score"><%- include('../partials/level', { level: s.level }) %></span>
+        </a>
+        <% if (rated) { %>
+          <span class="rated-mark" title="You rated this player">✓<span class="hide-sm"> Rated</span></span>
+        <% } else if (p.active) { %>
+          <a class="btn btn-small btn-primary" href="/players/<%= p.id %>/rate">Rate</a>
+        <% } %>
+      </li>
+    <% }) %>
+  </ul>
+<% } %>
+<%- include('../partials/foot') %>

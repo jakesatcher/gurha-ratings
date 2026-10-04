@@ -1,0 +1,8 @@
+<%- include('../partials/head') %>
+<section class="card narrow center">
+  <h1>Already rated</h1>
+  <div class="alert alert-error" role="alert"><%= message %></div>
+  <p><a class="btn" href="/players/<%= player.id %>">View <%= player.first_name %> <%= player.last_name %></a>
+     <a class="btn" href="/players?status=unrated">Players I haven't rated</a></p>
+</section>
+<%- include('../partials/foot') %>

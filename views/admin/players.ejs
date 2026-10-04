@@ -1,0 +1,30 @@
+<%- include('../partials/head') %>
+<div class="page-head"><h1>Manage players</h1><a class="btn btn-small btn-primary" href="/admin/players/new">+ Add player</a></div>
+<%- include('_nav') %>
+<form method="get" class="filters" role="search">
+  <div class="filter-row">
+    <input type="search" name="q" value="<%= q %>" placeholder="Search players" aria-label="Search players" class="search">
+    <button class="btn" type="submit">Search</button>
+    <a class="btn" href="/admin/export.csv">Export CSV</a>
+  </div>
+</form>
+<div class="table-wrap">
+<table class="table">
+  <thead><tr><th>Name</th><th>#</th><th>Team</th><th>Pos</th><th>Source</th><th class="num">Ratings</th><th>Level</th><th></th></tr></thead>
+  <tbody>
+  <% players.forEach(function (p) { const s = summaries.get(p.id); %>
+    <tr class="<%= p.active ? '' : 'inactive' %>">
+      <td><a href="/players/<%= p.id %>"><%= p.last_name %>, <%= p.first_name %></a><%= p.active ? '' : ' (inactive)' %></td>
+      <td><%= p.jersey_number || '' %></td>
+      <td><%= p.team || '' %></td>
+      <td><%= p.position || '' %></td>
+      <td><%= p.source %></td>
+      <td class="num"><%= s.count %></td>
+      <td><%- include('../partials/level', { level: s.level }) %></td>
+      <td><a href="/admin/players/<%= p.id %>/edit">Edit</a></td>
+    </tr>
+  <% }) %>
+  </tbody>
+</table>
+</div>
+<%- include('../partials/foot') %>
