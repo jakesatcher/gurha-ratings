@@ -108,6 +108,23 @@ test('upload → review → import into a new season, then re-import updates in 
   const alex = await h.db.one(`${h.SPOTS} WHERE p.id = ${h.byExt('se:80000001')}`);
   assert.strictEqual(alex.position, 'F', 'blank position in the file does not wipe an existing one');
 
+  // Browse: leagues → teams → players
+  const leagues = await admin.get('/players');
+  assert.match(leagues.text, /class="league-crest">C1B2</);
+  assert.match(leagues.text, /class="league-crest">D3</);
+  assert.match(leagues.text, /href="\/leagues\/C1B2"/);
+  const league = await admin.get('/leagues/C1B2');
+  assert.match(league.text, /class="team-name">1 TEST PENGUINS</);
+  assert.ok(!league.text.includes('2 TEST BEARS'), 'only teams in this league');
+  const bears = await h.db.one(`SELECT id FROM teams WHERE name = '2 TEST BEARS'`);
+  const teamPage = await admin.get(`/teams/${bears.id}`);
+  assert.match(teamPage.text, /Leagues<\/a> › <a href="\/leagues\/D3">D3<\/a> › 2 TEST BEARS/);
+  assert.match(teamPage.text, /<h2 class="section-title">Subs<\/h2>[\s\S]*Goalie, Gus/);
+  assert.match(teamPage.text, /#23/, 'team-specific jersey number');
+  assert.strictEqual((await admin.get('/leagues/NOPE')).status, 404);
+  // Sponsors
+  assert.match(leagues.text, /\/static\/ads\/robert-sucks\.svg/);
+
   // Player page shows age derived from date of birth
   const p = await h.db.one(`SELECT ${h.byExt('se:80000002')} AS id`);
   assert.match((await admin.get(`/players/${p.id}`)).text, /Age \d{2}/);

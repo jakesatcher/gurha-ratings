@@ -6,13 +6,15 @@
   <meta name="theme-color" content="#0b1f3a">
   <title><%= title ? `${title} · ${appName}` : appName %></title>
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="/static/fonts/oswald-latin-700-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/static/css/app.css">
   <script src="/static/js/app.js" defer></script>
 </head>
 <body>
+<div class="rink-bg" aria-hidden="true"></div>
 <header class="topbar">
   <div class="topbar-inner">
-    <a class="brand" href="/"><span class="brand-mark" aria-hidden="true">🏒</span> GURHA <span class="brand-sub">Ratings</span></a>
+    <a class="brand" href="/"><span class="brand-puck" aria-hidden="true"></span><span class="brand-text">GURHA</span> <span class="brand-sub">Ratings</span></a>
     <% if (currentUser) { %>
     <nav class="nav" aria-label="Main">
       <a href="/players" class="<%= path.startsWith('/players') ? 'active' : '' %>">Players</a>
@@ -46,5 +48,6 @@
   </form>
 </div>
 <% } %>
+<%- include('ad', { slot: 'boards' }) %>
 <main class="container">
 <%- include('flash') %>

@@ -77,6 +77,14 @@ SportsEngine rejects queries over a complexity budget (101; roughly 1 + page siz
 
 The integration authenticates with OAuth client credentials. It reads the GraphQL schema (introspection) and builds every query from the fields your access actually exposes. Teams are filtered to a season by a season argument if `teams` has one, by a season field on the team, or through divisions. Rosters are fetched per team with `team(id)` when available. **Admin → SportsEngine → Diagnostics** runs a dry run that shows the generated query and the raw response. If introspection is disabled for your account, set `SPORTSENGINE_ROSTER_QUERY`.
 
+## Browsing
+
+**Players** opens on the leagues for the selected season (C1B2, D1C2, D2, D3…). Each league card shows its teams, players and rating progress. Open a league to see its teams, then a team to see its roster (regulars, then subs) with Rate buttons, then a player for their ratings and season history. Breadcrumbs (Leagues › League › Team › Player) link back up. The search box and "Players I haven't rated" / "All players" links are on the leagues page.
+
+## Look and feel
+
+The pages sit on a rink: a full NHL-proportion rink drawn in SVG, rotated for phones. The header is styled like a scoreboard with jersey-style headings (the Oswald font, self-hosted under the SIL Open Font License). Sponsor "dasher boards" scroll under the header, and there are board ads in player lists and a footer banner. The sponsors are fictional and live in `src/lib/ads.js` and `public/ads/`. Set `ADS_ENABLED=false` to turn all ads off.
+
 ## Players, registrations and duplicates
 
 SportsEngine issues a new **SportNgin ID for every registration**, not every person. The same player can show up as "Hassan" #50 on one team and "Hassan (Sub)" #23 on another, with two different IDs. The app keeps three separate things:

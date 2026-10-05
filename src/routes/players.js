@@ -7,6 +7,7 @@ const { requireAuth } = require('../middleware/auth');
 const { audit } = require('../lib/audit');
 const R = require('../lib/ratings');
 const roster = require('../lib/roster');
+const { levelForScore } = require('../lib/levels');
 
 const router = express.Router();
 
@@ -30,6 +31,96 @@ router.post('/season', requireAuth, async (req, res) => {
   const safe = back.startsWith('/') && !back.startsWith('//') ? back.replace(/\/(rate|edit)$/, '').split('?')[0] : '/players';
   res.redirect(safe.startsWith('/admin/ratings') ? '/players' : safe);
 });
+
+// ---------- Browse: league → team → player ----------
+
+const NO_LEAGUE = '_none';
+const leagueKey = (division) => (division ? encodeURIComponent(division) : NO_LEAGUE);
+
+// Everything the browse pages need for a season, computed once: teams with roster stats, grouped by league.
+async function browseData(season, userId) {
+  const [players, teams, mineRows] = await Promise.all([
+    roster.searchRoster(season.id),
+    roster.seasonTeams(season.id),
+    db.many('SELECT player_id FROM ratings WHERE rater_id = $1 AND season_id = $2', [userId, season.id]),
+  ]);
+  const summaries = await R.summariesForPlayers(players, season.id);
+  const mine = new Set(mineRows.map((r) => r.player_id));
+  const stats = (list) => {
+    const rated = list.filter((p) => summaries.get(p.id).count > 0);
+    const scores = rated.map((p) => summaries.get(p.id).avgOverall).filter((v) => v !== null);
+    const avg = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : null;
+    return {
+      players: list.length,
+      rated: rated.length,
+      ratedByMe: list.filter((p) => mine.has(p.id)).length,
+      review: list.filter((p) => summaries.get(p.id).needsReview).length,
+      avg,
+      level: levelForScore(avg),
+    };
+  };
+  const teamRows = teams.map((t) => {
+    const members = players.filter((p) => p.memberships.some((m) => m.team_id === t.id));
+    return { ...t, members, stats: stats(members) };
+  });
+  const leagues = new Map();
+  for (const t of teamRows) {
+    const key = leagueKey(t.division);
+    if (!leagues.has(key)) leagues.set(key, { key, name: t.division || 'No league', teams: [] });
+    leagues.get(key).teams.push(t);
+  }
+  for (const l of leagues.values()) {
+    const people = [...new Map(l.teams.flatMap((t) => t.members).map((p) => [p.id, p])).values()];
+    l.stats = stats(people);
+  }
+  const unassigned = players.filter((p) => !p.memberships.some((m) => m.team_id));
+  const sorted = [...leagues.values()].sort((a, b) => (a.key === NO_LEAGUE) - (b.key === NO_LEAGUE) || a.name.localeCompare(b.name, undefined, { numeric: true }));
+  return { players, summaries, mine, leagues: sorted, unassigned, totals: stats(players) };
+}
+
+router.get('/players', requireAuth, async (req, res, next) => {
+  if (!req.season) return noSeason(req, res);
+  const searching = ['q', 'team', 'position', 'status', 'sort'].some((k) => req.query[k]) || req.query.view === 'all';
+  if (searching) return next();
+  const data = await browseData(req.season, req.user.id);
+  res.render('players/leagues', { title: 'Leagues', ...data });
+});
+
+router.get('/leagues/:key', requireAuth, async (req, res) => {
+  if (!req.season) return noSeason(req, res);
+  const data = await browseData(req.season, req.user.id);
+  const league = data.leagues.find((l) => l.key === leagueKey(req.params.key === NO_LEAGUE ? null : req.params.key));
+  if (!league) return res.status(404).render('error', { title: 'Not found', message: `That league isn't in ${req.season.name}.` });
+  res.render('players/league', { title: league.name, league });
+});
+
+router.get('/teams/:id', requireAuth, async (req, res) => {
+  const team = await db.one('SELECT * FROM teams WHERE id = $1', [Number(req.params.id) || 0]);
+  if (!team) return res.status(404).render('error', { title: 'Not found', message: 'Team not found.' });
+  if (!req.season || req.season.id !== team.season_id) {
+    // Follow the team into its season so ratings and links line up.
+    req.session.seasonId = team.season_id;
+    return res.redirect(req.originalUrl);
+  }
+  const players = await roster.teamRoster(team.id);
+  const summaries = await R.summariesForPlayers(players, req.season.id);
+  const mine = new Set(
+    (await db.many('SELECT player_id FROM ratings WHERE rater_id = $1 AND season_id = $2', [req.user.id, req.season.id])).map((r) => r.player_id)
+  );
+  const rated = players.filter((p) => summaries.get(p.id).count > 0).length;
+  res.render('players/team', {
+    title: team.name,
+    team,
+    leagueHref: `/leagues/${leagueKey(team.division)}`,
+    players,
+    summaries,
+    mine,
+    rated,
+    ratedByMe: players.filter((p) => mine.has(p.id)).length,
+  });
+});
+
+// ---------- Search / filtered list ----------
 
 router.get('/players', requireAuth, async (req, res) => {
   if (!req.season) return noSeason(req, res);

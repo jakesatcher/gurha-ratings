@@ -1,0 +1,26 @@
+<%# One player in a list. Locals: p (roster row), s (summary), rated (bool), and optionally jersey/isSub for a team view. %>
+<% const j = locals.jersey !== undefined ? locals.jersey : p.jersey_number; %>
+<li class="player-row">
+  <a class="player-link" href="/players/<%= p.id %>">
+    <span class="jersey"><%= j ? '#' + j : '–' %></span>
+    <span class="player-main">
+      <span class="player-name"><%= p.last_name %>, <%= p.first_name %>
+        <% if (locals.isSub) { %><span class="tag">Sub</span><% } %>
+        <% if (!p.active) { %><span class="tag">inactive</span><% } %>
+        <% if (s.needsReview) { %><span class="tag tag-warn" title="Raters differ by 2+ levels">3rd review</span><% } %>
+      </span>
+      <% if (!locals.hideTeams) { %>
+        <span class="player-meta"><%= [p.memberships.map(function (m) { return (m.team || 'No team') + (m.is_sub ? ' (sub)' : ''); }).join(', '), p.position ? ({F:'Forward',D:'Defense',G:'Goalie'})[p.position] : null].filter(Boolean).join(' · ') || '—' %></span>
+      <% } else if (p.position) { %>
+        <span class="player-meta"><%= ({F:'Forward',D:'Defense',G:'Goalie'})[p.position] %></span>
+      <% } %>
+      <span class="player-meta"><%= s.count ? fmt(s.avgOverall) + ' avg · ' + s.count + ' rating' + (s.count === 1 ? '' : 's') : 'No ratings yet' %></span>
+    </span>
+    <span class="player-score"><%- include('level', { level: s.level }) %></span>
+  </a>
+  <% if (rated) { %>
+    <span class="rated-mark" title="You rated this player">✓<span class="hide-sm"> Rated</span></span>
+  <% } else if (p.active && season.ratings_open) { %>
+    <a class="btn btn-small btn-primary" href="/players/<%= p.id %>/rate">Rate</a>
+  <% } %>
+</li>

@@ -1,0 +1,25 @@
+<%- include('../partials/head') %>
+<p class="crumbs"><a href="/players">Leagues</a> › <%= league.name %></p>
+<div class="page-head">
+  <div>
+    <h1><%= league.name %></h1>
+    <p class="muted page-sub"><%= season.name %> · <%= league.teams.length %> teams · <%= league.stats.players %> players</p>
+  </div>
+  <%- include('../partials/level', { level: league.stats.level, big: true }) %>
+</div>
+
+<div class="team-grid">
+  <% league.teams.forEach(function (t) { %>
+    <a class="team-card" href="/teams/<%= t.id %>">
+      <span class="team-name"><%= t.name %></span>
+      <span class="team-meta small"><%= t.stats.players %> players<%= t.stats.review ? ` · ${t.stats.review} need 3rd review` : '' %></span>
+      <%- include('../partials/progress', { done: t.stats.rated, total: t.stats.players }) %>
+      <span class="league-foot">
+        <span class="small">You've rated <strong><%= t.stats.ratedByMe %></strong></span>
+        <span class="small muted">Avg <%= fmt(t.stats.avg) %></span>
+        <%- include('../partials/level', { level: t.stats.level }) %>
+      </span>
+    </a>
+  <% }) %>
+</div>
+<%- include('../partials/foot') %>

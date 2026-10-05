@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 850 2000" preserveAspectRatio="xMidYMid slice">
+<defs>
+<clipPath id="rink"><rect x="10" y="10" width="1980" height="830" rx="280"/></clipPath>
+<pattern id="ice" width="240" height="240" patternUnits="userSpaceOnUse">
+  <path d="M0 40 L240 10 M20 200 L220 150 M60 0 L180 240 M0 120 Q120 100 240 140" stroke="#c9d6e2" stroke-width="1" fill="none" opacity=".5"/>
+</pattern>
+</defs>
+<g transform="translate(850 0) rotate(90)">
+<rect x="10" y="10" width="1980" height="830" rx="280" fill="#f7fbfe" stroke="#9aa9b8" stroke-width="20"/>
+<rect x="10" y="10" width="1980" height="830" rx="280" fill="url(#ice)"/>
+<line x1="110" y1="10" x2="110" y2="840" stroke="#d0202e" stroke-width="5" clip-path="url(#rink)"/>
+<line x1="1890" y1="10" x2="1890" y2="840" stroke="#d0202e" stroke-width="5" clip-path="url(#rink)"/>
+<rect x="744" y="10" width="12" height="830" fill="#1f4fb5"/>
+<rect x="1244" y="10" width="12" height="830" fill="#1f4fb5"/>
+<rect x="994.0" y="10" width="12" height="830" fill="#d0202e"/>
+<line x1="1000.0" y1="10" x2="1000.0" y2="840" stroke="#fff" stroke-width="3" stroke-dasharray="20 30"/>
+<circle cx="1000.0" cy="425.0" r="150" fill="none" stroke="#1f4fb5" stroke-width="5"/>
+<circle cx="1000.0" cy="425.0" r="6" fill="#1f4fb5"/>
+<text x="1000.0" y="453.0" text-anchor="middle" font-family="Impact, 'Arial Black', sans-serif" font-size="84" fill="#1f4fb5" opacity=".18" letter-spacing="8">GURHA</text>
+<circle cx="310" cy="205.0" r="150" fill="none" stroke="#d0202e" stroke-width="5"/>
+<circle cx="310" cy="205.0" r="10" fill="#d0202e"/>
+<line x1="280" y1="57.0" x2="280" y2="37.0" stroke="#d0202e" stroke-width="4"/>
+<line x1="280" y1="353.0" x2="280" y2="373.0" stroke="#d0202e" stroke-width="4"/>
+<line x1="340" y1="57.0" x2="340" y2="37.0" stroke="#d0202e" stroke-width="4"/>
+<line x1="340" y1="353.0" x2="340" y2="373.0" stroke="#d0202e" stroke-width="4"/>
+<circle cx="310" cy="645.0" r="150" fill="none" stroke="#d0202e" stroke-width="5"/>
+<circle cx="310" cy="645.0" r="10" fill="#d0202e"/>
+<line x1="280" y1="497.0" x2="280" y2="477.0" stroke="#d0202e" stroke-width="4"/>
+<line x1="280" y1="793.0" x2="280" y2="813.0" stroke="#d0202e" stroke-width="4"/>
+<line x1="340" y1="497.0" x2="340" y2="477.0" stroke="#d0202e" stroke-width="4"/>
+<line x1="340" y1="793.0" x2="340" y2="813.0" stroke="#d0202e" stroke-width="4"/>
+<circle cx="1690" cy="205.0" r="150" fill="none" stroke="#d0202e" stroke-width="5"/>
+<circle cx="1690" cy="205.0" r="10" fill="#d0202e"/>
+<line x1="1660" y1="57.0" x2="1660" y2="37.0" stroke="#d0202e" stroke-width="4"/>
+<line x1="1660" y1="353.0" x2="1660" y2="373.0" stroke="#d0202e" stroke-width="4"/>
+<line x1="1720" y1="57.0" x2="1720" y2="37.0" stroke="#d0202e" stroke-width="4"/>
+<line x1="1720" y1="353.0" x2="1720" y2="373.0" stroke="#d0202e" stroke-width="4"/>
+<circle cx="1690" cy="645.0" r="150" fill="none" stroke="#d0202e" stroke-width="5"/>
+<circle cx="1690" cy="645.0" r="10" fill="#d0202e"/>
+<line x1="1660" y1="497.0" x2="1660" y2="477.0" stroke="#d0202e" stroke-width="4"/>
+<line x1="1660" y1="793.0" x2="1660" y2="813.0" stroke="#d0202e" stroke-width="4"/>
+<line x1="1720" y1="497.0" x2="1720" y2="477.0" stroke="#d0202e" stroke-width="4"/>
+<line x1="1720" y1="793.0" x2="1720" y2="813.0" stroke="#d0202e" stroke-width="4"/>
+<circle cx="800" cy="205.0" r="10" fill="#d0202e"/>
+<circle cx="800" cy="645.0" r="10" fill="#d0202e"/>
+<circle cx="1200" cy="205.0" r="10" fill="#d0202e"/>
+<circle cx="1200" cy="645.0" r="10" fill="#d0202e"/>
+<path d="M110 365.0 A60 60 0 0 1 110 485.0 Z" fill="#7fb3ff" fill-opacity=".45" stroke="#d0202e" stroke-width="4"/>
+<rect x="70" y="395.0" width="40" height="60" fill="none" stroke="#d0202e" stroke-width="5"/>
+<path d="M1890 365.0 A60 60 0 0 0 1890 485.0 Z" fill="#7fb3ff" fill-opacity=".45" stroke="#d0202e" stroke-width="4"/>
+<rect x="1890" y="395.0" width="40" height="60" fill="none" stroke="#d0202e" stroke-width="5"/>
+</g>
+</svg>

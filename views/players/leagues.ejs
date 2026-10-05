@@ -1,0 +1,44 @@
+<%- include('../partials/head') %>
+<div class="page-head">
+  <div>
+    <h1>Leagues</h1>
+    <p class="muted page-sub"><%= season.name %></p>
+  </div>
+  <% if (currentUser.role === 'admin') { %><a class="btn btn-small" href="/admin/players/new">+ Add player</a><% } %>
+</div>
+
+<%- include('../partials/search') %>
+
+<div class="scoreboard">
+  <div><span class="sb-num"><%= totals.players %></span><span class="sb-label">Players</span></div>
+  <div><span class="sb-num"><%= totals.rated %></span><span class="sb-label">Rated</span></div>
+  <div><span class="sb-num"><%= totals.ratedByMe %></span><span class="sb-label">By you</span></div>
+  <div><span class="sb-num"><%= leagues.length %></span><span class="sb-label">Leagues</span></div>
+</div>
+
+<% if (!leagues.length) { %>
+  <div class="card center">
+    <p>No teams in <strong><%= season.name %></strong> yet.</p>
+    <% if (currentUser.role === 'admin') { %><p><a href="/admin/import">Import a SportsEngine roster</a> or <a href="/admin/players/new">add players</a>.</p><% } %>
+  </div>
+<% } %>
+
+<div class="league-grid">
+  <% leagues.forEach(function (l) { %>
+    <a class="league-card" href="/leagues/<%= l.key %>">
+      <span class="league-crest"><%= l.name %></span>
+      <span class="league-meta"><%= l.teams.length %> team<%= l.teams.length === 1 ? '' : 's' %> · <%= l.stats.players %> players</span>
+      <%- include('../partials/progress', { done: l.stats.rated, total: l.stats.players }) %>
+      <span class="league-foot">
+        <span class="small">You've rated <strong><%= l.stats.ratedByMe %></strong></span>
+        <% if (l.stats.review) { %><span class="tag tag-warn"><%= l.stats.review %> 3rd review</span><% } %>
+        <span class="small muted">Avg</span> <%- include('../partials/level', { level: l.stats.level }) %>
+      </span>
+    </a>
+  <% }) %>
+</div>
+
+<% if (unassigned.length) { %>
+  <p class="small muted"><%= unassigned.length %> player<%= unassigned.length === 1 ? ' is' : 's are' %> on the roster without a team. <a href="/players?view=all">See all players</a>.</p>
+<% } %>
+<%- include('../partials/foot') %>

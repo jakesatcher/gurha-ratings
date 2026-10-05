@@ -12,6 +12,7 @@ const { csrf, flash } = require('./middleware/security');
 const { loadUser } = require('./middleware/auth');
 const { loadSeason } = require('./lib/roster');
 const levels = require('./lib/levels');
+const ads = require('./lib/ads');
 
 function createApp() {
   const app = express();
@@ -28,6 +29,7 @@ function createApp() {
           imgSrc: ["'self'", 'data:'],
           scriptSrc: ["'self'"],
           styleSrc: ["'self'"],
+          fontSrc: ["'self'"],
           styleSrcAttr: ["'unsafe-inline'"], // numeric bar widths only
           formAction: ["'self'"],
           frameAncestors: ["'none'"],
@@ -76,6 +78,7 @@ function createApp() {
     res.locals.levels = levels;
     res.locals.title = null;
     res.locals.tz = config.timeZone;
+    res.locals.ads = ads;
     res.locals.currentUser = null;
     res.locals.csrfToken = '';
     res.locals.flash = [];

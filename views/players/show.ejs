@@ -1,6 +1,6 @@
 <%- include('../partials/head') %>
 <% const isAdmin = currentUser.role === 'admin'; const posName = { F: 'Forward', D: 'Defense', G: 'Goaltender' }; %>
-<p class="crumbs"><a href="/players">← Players</a></p>
+<p class="crumbs"><a href="/players">Leagues</a><% if (player.team_id) { %> › <a href="/leagues/<%= player.division ? encodeURIComponent(player.division) : '_none' %>"><%= player.division || 'No league' %></a> › <a href="/teams/<%= player.team_id %>"><%= player.team %></a><% } %> › <%= player.first_name %> <%= player.last_name %></p>
 
 <section class="card player-hero">
   <div class="hero-main">

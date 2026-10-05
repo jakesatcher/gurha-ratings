@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 100" width="400" height="100" role="img">
+<defs><clipPath id="c"><rect width="400" height="100" rx="6"/></clipPath>
+<linearGradient id="g" x1="0" x2="1"><stop offset="0" stop-color="#ff6a00" stop-opacity=".9"/><stop offset=".45" stop-color="#ff6a00" stop-opacity="0"/></linearGradient></defs>
+<g clip-path="url(#c)">
+<rect width="400" height="100" fill="#111"/>
+<rect width="400" height="100" fill="url(#g)"/>
+<g transform="translate(30 14)"><path d="M28 0 C40 22 58 26 50 52 C46 66 32 72 24 72 C10 72 0 60 2 46 C4 32 16 30 14 14 C22 20 26 26 28 0Z" fill="#ffd166"/>
+<path d="M28 30 C34 42 42 46 36 60 C30 68 18 66 16 56 C14 46 24 44 28 30Z" fill="#ff6a00"/></g>
+<text x="102" y="54" font-family="Impact, Haettenschweiler, 'Arial Narrow Bold', 'Arial Black', sans-serif" font-size="42" fill="#ffffff" textLength="276" lengthAdjust="spacingAndGlyphs" >BARN BURNER BBQ</text>
+<text x="103" y="79" font-family="Arial, Helvetica, sans-serif" font-size="13.5" fill="#ffd166" textLength="270" lengthAdjust="spacingAndGlyphs" font-weight="700">Smoked low and slow. Like our defense.</text>
+</g>
+</svg>

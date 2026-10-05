@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 100" width="400" height="100" role="img">
+<defs><clipPath id="c"><rect width="400" height="100" rx="6"/></clipPath>
+<linearGradient id="g" x1="0" x2="1"><stop offset="0" stop-color="#ff6a00" stop-opacity=".9"/><stop offset=".45" stop-color="#ff6a00" stop-opacity="0"/></linearGradient></defs>
+<g clip-path="url(#c)">
+<rect width="400" height="100" fill="#3b2314"/>
+<rect y="0" width="400" height="8" fill="#d4a017"/><rect y="92" width="400" height="8" fill="#d4a017"/>
+<g transform="translate(26 18)">
+  <rect x="0" y="10" width="40" height="52" rx="4" fill="#f2b632"/><rect x="0" y="4" width="40" height="14" rx="6" fill="#fff8e7"/>
+  <path d="M40 22 h10 a8 8 0 0 1 0 22 h-10" fill="none" stroke="#fff8e7" stroke-width="5"/>
+</g>
+<text x="104" y="56" font-family="Impact, Haettenschweiler, 'Arial Narrow Bold', 'Arial Black', sans-serif" font-size="40" fill="#fff8e7" textLength="272" lengthAdjust="spacingAndGlyphs" >SIN BIN TAVERN</text>
+<text x="105" y="79" font-family="Georgia, serif" font-size="14" fill="#f2b632" textLength="270" lengthAdjust="spacingAndGlyphs" font-style="italic">Serving two minutes at a time · Est. 1st Period</text>
+</g>
+</svg>

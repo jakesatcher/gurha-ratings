@@ -1,0 +1,33 @@
+<%- include('../partials/head') %>
+<p class="crumbs"><a href="/players">Leagues</a> › <a href="<%= leagueHref %>"><%= team.division || 'No league' %></a> › <%= team.name %></p>
+<div class="page-head">
+  <div>
+    <h1><%= team.name %></h1>
+    <p class="muted page-sub"><%= team.division || 'No league' %> · <%= season.name %></p>
+  </div>
+  <a class="btn btn-small" href="/reports/teams?team=<%= team.id %>">Team summary</a>
+</div>
+
+<div class="scoreboard">
+  <div><span class="sb-num"><%= players.length %></span><span class="sb-label">Players</span></div>
+  <div><span class="sb-num"><%= rated %></span><span class="sb-label">Rated</span></div>
+  <div><span class="sb-num"><%= ratedByMe %></span><span class="sb-label">By you</span></div>
+</div>
+
+<% const regulars = players.filter(function (p) { return !p.team_is_sub; }); const subs = players.filter(function (p) { return p.team_is_sub; }); %>
+<% if (!players.length) { %><div class="card center"><p>No players on this team yet.</p></div><% } %>
+<ul class="player-list">
+  <% regulars.forEach(function (p) { %>
+    <%- include('../partials/player-row', { p: p, s: summaries.get(p.id), rated: mine.has(p.id), jersey: p.team_jersey, hideTeams: true }) %>
+  <% }) %>
+</ul>
+<% if (subs.length) { %>
+  <h2 class="section-title">Subs</h2>
+  <ul class="player-list">
+    <% subs.forEach(function (p) { %>
+      <%- include('../partials/player-row', { p: p, s: summaries.get(p.id), rated: mine.has(p.id), jersey: p.team_jersey, isSub: true, hideTeams: true }) %>
+    <% }) %>
+  </ul>
+<% } %>
+<div class="feed-ad"><%- include('../partials/ad', { slot: 'feed' }) %></div>
+<%- include('../partials/foot') %>

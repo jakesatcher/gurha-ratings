@@ -1,0 +1,6 @@
+<%# Rating progress. Locals: done, total, label %>
+<% const pct = total ? Math.round((done / total) * 100) : 0; %>
+<div class="progress" role="img" aria-label="<%= done %> of <%= total %> <%= locals.label || 'rated' %>">
+  <span class="progress-fill" style="width: <%= pct %>%"></span>
+</div>
+<div class="progress-text small"><%= done %>/<%= total %> <%= locals.label || 'rated' %></div>
