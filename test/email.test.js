@@ -58,7 +58,7 @@ test.after(async () => {
 async function loginWithResend(email) {
   const agent = h.request.agent(app);
   const page = await agent.get('/login');
-  await agent.post('/login').type('form').send({ _csrf: h.csrfFrom(page.text), email, password: 'password1234' });
+  await agent.post('/login').type('form').send({ _csrf: h.csrfFrom(page.text), email, password: 'Slapshot!Goal47' });
   const sent = resend.requests.filter((r) => r.body.to[0] === email).pop();
   const code = /(\d{6})/.exec(sent.body.subject)[1];
   const mfa = await agent.get('/mfa');
@@ -108,7 +108,7 @@ test('if Resend is down, sign-in shows a friendly error and the user can retry r
   resend.plan.push({ status: 500 }, { status: 500 }, { status: 500 });
   const agent = h.request.agent(app);
   const page = await agent.get('/login');
-  const res = await agent.post('/login').type('form').send({ _csrf: h.csrfFrom(page.text), email: 'down@test.com', password: 'password1234' });
+  const res = await agent.post('/login').type('form').send({ _csrf: h.csrfFrom(page.text), email: 'down@test.com', password: 'Slapshot!Goal47' });
   assert.strictEqual(res.headers.location, '/mfa');
   const mfa = await agent.get('/mfa');
   assert.strictEqual(mfa.status, 200);
@@ -139,7 +139,7 @@ test('admin email page, test send, alert opt-out and security notices', async ()
   const anon = h.request.agent(app);
   const reg = await anon.get('/register');
   await anon.post('/register').type('form').send({
-    _csrf: h.csrfFrom(reg.text), name: 'New Person', email: 'new@test.com', password: 'password1234', password_confirm: 'password1234', request_note: 'I play on the Hawks',
+    _csrf: h.csrfFrom(reg.text), name: 'New Person', email: 'new@test.com', password: 'Slapshot!Goal47', password_confirm: 'Slapshot!Goal47', request_note: 'I play on the Hawks',
   });
   await until(() => resend.requests.some((r) => r.body.to[0] === 'boss@test.com'));
   const alert = resend.requests.find((r) => r.body.to[0] === 'boss@test.com');
@@ -151,7 +151,7 @@ test('admin email page, test send, alert opt-out and security notices', async ()
   resend.requests.length = 0;
   const reg2 = await anon.get('/register');
   const again = await anon.post('/register').type('form').send({
-    _csrf: h.csrfFrom(reg2.text), name: 'Imposter', email: 'NEW@test.com', password: 'differentpass99', password_confirm: 'differentpass99',
+    _csrf: h.csrfFrom(reg2.text), name: 'Imposter', email: 'NEW@test.com', password: 'Different!Pass47', password_confirm: 'Different!Pass47',
   });
   assert.match(again.text, /Request submitted/);
   await until(() => resend.requests.some((r) => r.body.to[0] === 'boss@test.com'));
@@ -178,7 +178,7 @@ test('admin email page, test send, alert opt-out and security notices', async ()
   assert.doesNotMatch(after.text, /\b\d{6} is your/, 'codes are redacted in the log view');
 
   // Security notice when the password changes
-  await h.post(boss, '/account/password', { current_password: 'password1234', password: 'newpassword123', password_confirm: 'newpassword123' }, '/account');
+  await h.post(boss, '/account/password', { current_password: 'Slapshot!Goal47', password: 'NewGoalie#Save82', password_confirm: 'NewGoalie#Save82' }, '/account');
   await until(() => resend.requests.some((r) => r.body.to[0] === 'boss@test.com' && /password was changed/.test(r.body.subject)));
 
   // Raters can't see the email page

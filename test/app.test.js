@@ -37,7 +37,7 @@ test('access request → admin approval → MFA → rating once → duplicate er
   const anon = h.request.agent(app);
   const reg = await anon.get('/register');
   const r = await anon.post('/register').type('form').send({
-    _csrf: h.csrfFrom(reg.text), name: 'Riley Rater', email: 'Riley@Test.com', password: 'password1234', password_confirm: 'password1234',
+    _csrf: h.csrfFrom(reg.text), name: 'Riley Rater', email: 'Riley@Test.com', password: 'Slapshot!Goal47', password_confirm: 'Slapshot!Goal47',
   });
   assert.strictEqual(r.status, 200);
   assert.match(r.text, /Request submitted/);
@@ -45,7 +45,7 @@ test('access request → admin approval → MFA → rating once → duplicate er
 
   // Pending users can't sign in
   const loginPage = await anon.get('/login');
-  const pending = await anon.post('/login').type('form').send({ _csrf: h.csrfFrom(loginPage.text), email: 'riley@test.com', password: 'password1234' });
+  const pending = await anon.post('/login').type('form').send({ _csrf: h.csrfFrom(loginPage.text), email: 'riley@test.com', password: 'Slapshot!Goal47' });
   assert.strictEqual(pending.status, 401);
   assert.match(pending.text, /awaiting admin approval/);
 
@@ -59,7 +59,7 @@ test('access request → admin approval → MFA → rating once → duplicate er
   // Rater signs in and enrols an authenticator app
   const raterAgent = h.request.agent(app);
   const lp = await raterAgent.get('/login');
-  const lr = await raterAgent.post('/login').type('form').send({ _csrf: h.csrfFrom(lp.text), email: 'riley@test.com', password: 'password1234' });
+  const lr = await raterAgent.post('/login').type('form').send({ _csrf: h.csrfFrom(lp.text), email: 'riley@test.com', password: 'Slapshot!Goal47' });
   assert.strictEqual(lr.headers.location, '/mfa/setup');
   // Can't reach the app before finishing MFA
   assert.strictEqual((await raterAgent.get('/players')).headers.location, '/login');
@@ -206,7 +206,7 @@ test('wrong email code is rejected and attempts are limited', async () => {
   await h.db.query(`UPDATE users SET mfa_method = 'email' WHERE email = 'otp@test.com'`);
   const agent = h.request.agent(app);
   const lp = await agent.get('/login');
-  await agent.post('/login').type('form').send({ _csrf: h.csrfFrom(lp.text), email: 'otp@test.com', password: 'password1234' });
+  await agent.post('/login').type('form').send({ _csrf: h.csrfFrom(lp.text), email: 'otp@test.com', password: 'Slapshot!Goal47' });
   const code = h.lastCodeFor('otp@test.com');
   const page = await agent.get('/mfa');
   const csrf = h.csrfFrom(page.text);

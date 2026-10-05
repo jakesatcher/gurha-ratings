@@ -9,10 +9,11 @@ const helmet = require('helmet');
 const config = require('./config');
 const db = require('./db');
 const { csrf, flash } = require('./middleware/security');
-const { loadUser } = require('./middleware/auth');
+const { loadUser, requirePasswordUpdate } = require('./middleware/auth');
 const { loadSeason } = require('./lib/roster');
 const levels = require('./lib/levels');
 const ads = require('./lib/ads');
+const passwordPolicy = require('../public/js/password-policy');
 
 function createApp() {
   const app = express();
@@ -82,6 +83,7 @@ function createApp() {
     res.locals.title = null;
     res.locals.tz = config.timeZone;
     res.locals.ads = ads;
+    res.locals.passwordPolicy = passwordPolicy;
     res.locals.currentUser = null;
     res.locals.csrfToken = '';
     res.locals.flash = [];
@@ -109,6 +111,7 @@ function createApp() {
   app.use(flash);
   app.use(csrf);
   app.use(loadUser);
+  app.use(requirePasswordUpdate);
   app.use(loadSeason);
 
   app.use(require('./routes/auth'));

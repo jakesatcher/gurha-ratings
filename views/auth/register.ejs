@@ -8,9 +8,9 @@
       <input type="hidden" name="_csrf" value="<%= csrfToken %>">
       <label>Full name <input name="name" value="<%= values.name || '' %>" autocomplete="name" required maxlength="100"></label>
       <label>Email <input type="email" name="email" value="<%= values.email || '' %>" autocomplete="email" required></label>
-      <label>Password <input type="password" name="password" autocomplete="new-password" minlength="10" required>
-        <small class="muted">At least 10 characters.</small></label>
-      <label>Confirm password <input type="password" name="password_confirm" autocomplete="new-password" minlength="10" required></label>
+      <label>Password <input type="password" name="password" autocomplete="new-password" minlength="12" maxlength="128" required data-password-input aria-describedby="pw-rules"></label>
+      <label>Confirm password <input type="password" name="password_confirm" autocomplete="new-password" minlength="12" maxlength="128" required data-password-confirm></label>
+      <div id="pw-rules"><%- include('../partials/password-rules') %></div>
       <label>Note for the admin <small class="muted">(optional — e.g. your team or role)</small>
         <textarea name="request_note" rows="2" maxlength="1000"><%= values.request_note || '' %></textarea></label>
       <button class="btn btn-primary btn-block" type="submit">Submit request</button>

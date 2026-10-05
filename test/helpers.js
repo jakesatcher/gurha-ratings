@@ -35,7 +35,7 @@ function lastCodeFor(email) {
   return /(\d{6})/.exec(msg.subject)[1];
 }
 
-async function createUser({ email, name = 'User', password = 'password1234', role = 'rater', status = 'approved' }) {
+async function createUser({ email, name = 'User', password = 'Slapshot!Goal47', role = 'rater', status = 'approved' }) {
   return db.one(
     `INSERT INTO users (email, name, password_hash, role, status) VALUES ($1, $2, $3, $4, $5) RETURNING *`,
     [email, name, await bcrypt.hash(password, 4), role, status]
@@ -43,7 +43,7 @@ async function createUser({ email, name = 'User', password = 'password1234', rol
 }
 
 // Signs in with password + email code (enrolling in email MFA on first sign-in).
-async function login(app, email, password = 'password1234') {
+async function login(app, email, password = 'Slapshot!Goal47') {
   const agent = request.agent(app);
   const page = await agent.get('/login');
   const res = await agent.post('/login').type('form').send({ _csrf: csrfFrom(page.text), email, password });

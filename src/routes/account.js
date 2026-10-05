@@ -7,7 +7,7 @@ const { requireAuth } = require('../middleware/auth');
 const { audit } = require('../lib/audit');
 const mailer = require('../lib/mailer');
 const emails = require('../lib/emails');
-const { passwordProblem } = require('./auth');
+const { passwordProblems } = require('./auth');
 
 const router = express.Router();
 
@@ -36,11 +36,33 @@ router.post('/account/notifications', requireAuth, async (req, res) => {
   res.redirect('/account');
 });
 
+// Required after signing in with a password that doesn't meet the current policy.
+router.get('/account/new-password', requireAuth, (req, res) => {
+  if (!req.session.mustChangePassword) return res.redirect('/account');
+  res.render('account/new-password', { title: 'Choose a new password', errors: [] });
+});
+
+router.post('/account/new-password', requireAuth, async (req, res) => {
+  if (!req.session.mustChangePassword) return res.redirect('/account');
+  const problems = passwordProblems(req.body.password, req.body.password_confirm);
+  const user = await db.one('SELECT password_hash FROM users WHERE id = $1', [req.user.id]);
+  if (!problems.length && (await bcrypt.compare(String(req.body.password), user.password_hash))) {
+    problems.push('Choose a password different from your current one.');
+  }
+  if (problems.length) return res.status(422).render('account/new-password', { title: 'Choose a new password', errors: problems });
+  await db.query('UPDATE users SET password_hash = $1, updated_at = now() WHERE id = $2', [await bcrypt.hash(req.body.password, 12), req.user.id]);
+  delete req.session.mustChangePassword;
+  await audit(req.user.id, 'password_changed', 'user', req.user.id, { reason: 'policy' });
+  mailer.sendQuietly({ to: req.user.email, userId: req.user.id, ...emails.securityNotice({ name: req.user.name, what: 'Your password was changed' }) });
+  req.flash('success', 'Password updated. Thanks for keeping your account secure.');
+  res.redirect('/players');
+});
+
 router.post('/account/password', requireAuth, async (req, res) => {
   const user = await db.one('SELECT password_hash FROM users WHERE id = $1', [req.user.id]);
   let error = null;
   if (!(await bcrypt.compare(String(req.body.current_password || ''), user.password_hash))) error = 'Current password is incorrect.';
-  else error = passwordProblem(req.body.password) || (req.body.password !== req.body.password_confirm ? 'Passwords do not match.' : null);
+  else error = passwordProblems(req.body.password, req.body.password_confirm).join(' ') || null;
   if (error) {
     req.flash('error', error);
     return res.redirect('/account');

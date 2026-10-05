@@ -25,8 +25,9 @@
     <form method="post" action="/account/password" class="stack">
       <input type="hidden" name="_csrf" value="<%= csrfToken %>">
       <label>Current password <input type="password" name="current_password" autocomplete="current-password" required></label>
-      <label>New password <input type="password" name="password" autocomplete="new-password" minlength="10" required></label>
-      <label>Confirm new password <input type="password" name="password_confirm" autocomplete="new-password" minlength="10" required></label>
+      <label>New password <input type="password" name="password" autocomplete="new-password" minlength="12" maxlength="128" required data-password-input aria-describedby="pw-rules"></label>
+      <label>Confirm new password <input type="password" name="password_confirm" autocomplete="new-password" minlength="12" maxlength="128" required data-password-confirm></label>
+      <div id="pw-rules"><%- include('../partials/password-rules') %></div>
       <button class="btn" type="submit">Update password</button>
     </form>
   </section>

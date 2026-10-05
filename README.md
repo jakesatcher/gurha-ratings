@@ -77,6 +77,17 @@ SportsEngine rejects queries over a complexity budget (101; roughly 1 + page siz
 
 The integration authenticates with OAuth client credentials. It reads the GraphQL schema (introspection) and builds every query from the fields your access actually exposes. Teams are filtered to a season by a season argument if `teams` has one, by a season field on the team, or through divisions. Rosters are fetched per team with `team(id)` when available. **Admin → SportsEngine → Diagnostics** runs a dry run that shows the generated query and the raw response. If introspection is disabled for your account, set `SPORTSENGINE_ROSTER_QUERY`.
 
+## Password requirements
+
+Passwords must:
+- be at least 12 characters long
+- include a capital letter, a lowercase letter, a number, and a special character from `! @ # $ ^ * _ - + . , : ? ~`
+- not contain characters common in XSS/SQL-injection payloads: `< > ' " ` ` ; \ / & = % ( ) { } [ ] |`, spaces, or `--`
+- not repeat a character more than twice in a row (`aaa`, `111`)
+- not run more than two letters or numbers in sequence, up or down (`abc`, `cba`, `123`, `321`)
+
+The request-access, reset and change-password screens show the requirements and tick them off as you type. The rules live in one file (`public/js/password-policy.js`) used by both the browser and the server, so they can't drift apart. Passwords set before this rule are checked when the user signs in; if one doesn't qualify, the user must choose a new password before they can do anything else.
+
 ## Email
 
 Email goes through **Resend's HTTPS API**, which works on Railway even where outbound SMTP is blocked.

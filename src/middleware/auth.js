@@ -17,6 +17,15 @@ async function loadUser(req, res, next) {
   next();
 }
 
+// Until a weak password is replaced, a signed-in user can only reach the change-password page.
+const PASSWORD_UPDATE_ALLOWED = new Set(['/account/new-password', '/logout']);
+function requirePasswordUpdate(req, res, next) {
+  if (req.user && req.session.mustChangePassword && !PASSWORD_UPDATE_ALLOWED.has(req.path)) {
+    return res.redirect('/account/new-password');
+  }
+  next();
+}
+
 function requireAuth(req, res, next) {
   if (req.user) return next();
   if (req.method === 'GET') req.session.returnTo = req.originalUrl;
@@ -29,4 +38,4 @@ function requireAdmin(req, res, next) {
   return res.status(403).render('error', { title: 'Not allowed', message: 'Only admins can do that.' });
 }
 
-module.exports = { loadUser, requireAuth, requireAdmin };
+module.exports = { loadUser, requireAuth, requireAdmin, requirePasswordUpdate };

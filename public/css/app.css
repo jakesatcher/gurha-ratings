@@ -510,3 +510,12 @@ h2 { text-transform: uppercase; font-weight: 600; }
   .nav a, .nav .linklike { padding: .35rem .5rem; font-size: .88rem; letter-spacing: .03em; }
 }
 .hero-jersey { background: var(--goal-red); font-family: var(--font-display); box-shadow: inset 0 -5px 0 rgba(0, 0, 0, .2); }
+/* Password requirements checklist */
+.pw-rules { background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: .6rem .8rem; font-size: .88rem; }
+.pw-rules-title { margin: 0 0 .35rem; font-weight: 700; }
+.pw-rules ul { list-style: none; margin: 0; padding: 0; display: grid; gap: .2rem; }
+.pw-rules li { display: flex; gap: .45rem; align-items: flex-start; color: var(--muted); }
+.pw-icon { flex: 0 0 1rem; height: 1rem; margin-top: .15rem; border-radius: 50%; border: 2px solid var(--border); }
+.pw-rules:not(.pw-live) .pw-icon { border-radius: 2px; width: .4rem; height: .4rem; flex-basis: .4rem; margin: .45rem .3rem 0; background: var(--muted); border: 0; }
+.pw-rules li.ok { color: var(--ok-text); }
+.pw-rules li.ok .pw-icon { border-color: var(--ok-text); background: var(--ok-text); box-shadow: inset 0 0 0 2px var(--surface); }

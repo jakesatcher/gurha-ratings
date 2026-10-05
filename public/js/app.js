@@ -95,3 +95,35 @@
     }
   });
 })();
+
+// Live password requirements checklist (rules come from password-policy.js, the same file the server uses).
+(function () {
+  'use strict';
+  var input = document.querySelector('[data-password-input]');
+  var list = document.querySelector('[data-password-rules]');
+  if (!input || !list || !window.PasswordPolicy) return;
+  var confirm = document.querySelector('[data-password-confirm]');
+  list.classList.add('pw-live');
+  function update() {
+    var pw = input.value;
+    window.PasswordPolicy.RULES.forEach(function (rule) {
+      var li = list.querySelector('[data-rule="' + rule.id + '"]');
+      if (li) li.classList.toggle('ok', pw.length > 0 && rule.test(pw));
+    });
+    var match = list.querySelector('[data-rule="match"]');
+    if (match && confirm) match.classList.toggle('ok', pw.length > 0 && pw === confirm.value);
+  }
+  input.addEventListener('input', update);
+  if (confirm) confirm.addEventListener('input', update);
+  update();
+  // Block submitting until everything is met, so people fix it before a round trip.
+  input.form.addEventListener('submit', function (e) {
+    var problems = window.PasswordPolicy.check(input.value);
+    if (confirm && input.value !== confirm.value) problems.push('Passwords do not match.');
+    if (problems.length) {
+      e.preventDefault();
+      window.alert(problems.join('\n'));
+      input.focus();
+    }
+  });
+})();

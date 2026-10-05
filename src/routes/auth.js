@@ -13,20 +13,21 @@ const totp = require('../lib/totp');
 const { encrypt, decrypt, sha256, randomToken } = require('../lib/crypto');
 const { audit } = require('../lib/audit');
 const { loginLimiter, mfaLimiter, registerLimiter, resetLimiter } = require('../lib/limits');
+const passwordPolicy = require('../../public/js/password-policy');
 
 const router = express.Router();
 
 const MFA_PENDING_TTL_MS = 15 * 60 * 1000;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const MIN_PASSWORD = 10;
 
 // Dummy hash so failed lookups take as long as a real bcrypt compare.
 const DUMMY_HASH = bcrypt.hashSync('not-a-real-password', 10);
 
-function passwordProblem(pw) {
-  if (!pw || pw.length < MIN_PASSWORD) return `Password must be at least ${MIN_PASSWORD} characters.`;
-  if (pw.length > 200) return 'Password is too long.';
-  return null;
+// Everything wrong with a new password (empty when it meets the policy and matches its confirmation).
+function passwordProblems(pw, confirm) {
+  const problems = passwordPolicy.check(pw);
+  if (confirm !== undefined && pw !== confirm) problems.push('Passwords do not match.');
+  return problems;
 }
 
 function regenerate(req) {
@@ -57,8 +58,16 @@ async function setupUser(req) {
 
 async function completeLogin(req, res, user) {
   const returnTo = req.session.returnTo;
+  const weakPassword = Boolean(req.session.mfaPending && req.session.mfaPending.weakPassword);
   await regenerate(req);
   req.session.userId = user.id;
+  if (weakPassword) {
+    // Signed in with a password that predates the current policy: must choose a new one first.
+    req.session.mustChangePassword = true;
+    await db.query('UPDATE users SET last_login_at = now() WHERE id = $1', [user.id]);
+    await audit(user.id, 'login', 'user', user.id, { password_update_required: true });
+    return res.redirect('/account/new-password');
+  }
   await db.query('UPDATE users SET last_login_at = now() WHERE id = $1', [user.id]);
   await audit(user.id, 'login', 'user', user.id);
   res.redirect(returnTo && returnTo.startsWith('/') && !returnTo.startsWith('//') ? returnTo : '/players');
@@ -96,9 +105,7 @@ router.post('/register', registerLimiter, async (req, res) => {
   const errors = [];
   if (!values.name) errors.push('Name is required.');
   if (!EMAIL_RE.test(values.email)) errors.push('Enter a valid email address.');
-  const pwErr = passwordProblem(req.body.password);
-  if (pwErr) errors.push(pwErr);
-  if (req.body.password !== req.body.password_confirm) errors.push('Passwords do not match.');
+  errors.push(...passwordProblems(req.body.password, req.body.password_confirm));
   if (errors.length) return res.status(422).render('auth/register', { title: 'Request access', values, errors });
 
   const existing = await db.one('SELECT id, name, email, status, request_note FROM users WHERE lower(email) = $1', [values.email]);
@@ -144,7 +151,8 @@ router.post('/login', loginLimiter, async (req, res) => {
   const returnTo = req.session.returnTo;
   await regenerate(req);
   req.session.returnTo = returnTo;
-  req.session.mfaPending = { userId: user.id, at: Date.now() };
+  // The plaintext is only available now, so check it against the current policy here.
+  req.session.mfaPending = { userId: user.id, at: Date.now(), weakPassword: passwordPolicy.check(password).length > 0 };
 
   if (!user.mfa_method) return res.redirect('/mfa/setup');
   if (user.mfa_method === 'email') {
@@ -310,14 +318,14 @@ async function findReset(token) {
 router.get('/reset/:token', async (req, res) => {
   const reset = await findReset(req.params.token);
   if (!reset) return res.status(400).render('error', { title: 'Link expired', message: 'This reset link is invalid or has expired.' });
-  res.render('auth/reset', { title: 'Choose a new password', error: null });
+  res.render('auth/reset', { title: 'Choose a new password', errors: [] });
 });
 
 router.post('/reset/:token', resetLimiter, async (req, res) => {
   const reset = await findReset(req.params.token);
   if (!reset) return res.status(400).render('error', { title: 'Link expired', message: 'This reset link is invalid or has expired.' });
-  const err = passwordProblem(req.body.password) || (req.body.password !== req.body.password_confirm ? 'Passwords do not match.' : null);
-  if (err) return res.status(422).render('auth/reset', { title: 'Choose a new password', error: err });
+  const problems = passwordProblems(req.body.password, req.body.password_confirm);
+  if (problems.length) return res.status(422).render('auth/reset', { title: 'Choose a new password', errors: problems });
   await db.tx(async (c) => {
     await c.query('UPDATE users SET password_hash = $1, updated_at = now() WHERE id = $2', [await bcrypt.hash(req.body.password, 12), reset.user_id]);
     await c.query('UPDATE password_resets SET used_at = now() WHERE user_id = $1 AND used_at IS NULL', [reset.user_id]);
@@ -332,4 +340,4 @@ router.post('/reset/:token', resetLimiter, async (req, res) => {
 });
 
 module.exports = router;
-module.exports.passwordProblem = passwordProblem;
+module.exports.passwordProblems = passwordProblems;

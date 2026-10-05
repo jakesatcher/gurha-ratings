@@ -18,9 +18,13 @@ async function bootstrapAdmin() {
     }
     return;
   }
-  if (!password || password.length < 10) {
-    console.warn('ADMIN_EMAIL is set but ADMIN_PASSWORD is missing or shorter than 10 characters; skipping admin bootstrap.');
+  if (!password) {
+    console.warn('ADMIN_EMAIL is set but ADMIN_PASSWORD is missing; skipping admin bootstrap.');
     return;
+  }
+  const problems = require('../public/js/password-policy').check(password);
+  if (problems.length) {
+    console.warn(`ADMIN_PASSWORD doesn't meet the password policy (${problems.join(' ')}). The admin will be asked to choose a new password at first sign-in.`);
   }
   await db.query(
     `INSERT INTO users (email, name, password_hash, role, status, approved_at) VALUES ($1, $2, $3, 'admin', 'approved', now())`,
