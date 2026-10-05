@@ -3,9 +3,9 @@
 const express = require('express');
 const multer = require('multer');
 
-const config = require('../config');
 const db = require('../db');
 const mailer = require('../lib/mailer');
+const emails = require('../lib/emails');
 const sportsengine = require('../lib/sportsengine');
 const { requireAdmin } = require('../middleware/auth');
 const { verifyCsrf } = require('../middleware/security');
@@ -23,6 +23,7 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 *
 router.use(requireAdmin);
 router.use(require('./admin-seasons'));
 router.use(require('./admin-people'));
+router.use(require('./admin-email'));
 
 const id = (req) => Number(req.params.id) || 0;
 
@@ -91,24 +92,13 @@ router.post('/users/:id/:action', async (req, res) => {
         req.user.id,
         target.id,
       ]);
-      mailer
-        .send({
-          to: target.email,
-          subject: 'Your GURHA Ratings access was approved',
-          text: `Hi ${target.name},\n\nYour access to GURHA Ratings has been approved. Sign in at ${config.appUrl}/login\n\nYou'll be asked to set up two-step verification on your first sign-in.`,
-          html: mailer.wrapHtml(
-            'You’re approved!',
-            `<p>Hi ${mailer.escapeHtml(target.name)},</p><p>Your access to GURHA Ratings has been approved.</p>
-             <p><a href="${config.appUrl}/login" style="display:inline-block;background:#1d4ed8;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none">Sign in</a></p>
-             <p>You'll be asked to set up two-step verification on your first sign-in.</p>`
-          ),
-        })
-        .catch((err) => console.error('Failed to send approval email', err));
+      mailer.sendQuietly({ to: target.email, userId: target.id, ...emails.accessApproved({ name: target.name }) });
       req.flash('success', `${target.name} approved.`);
       break;
     case 'reject':
       if (self) break;
       await db.query(`UPDATE users SET status = 'rejected', updated_at = now() WHERE id = $1`, [target.id]);
+      if (req.body.notify !== 'no') mailer.sendQuietly({ to: target.email, userId: target.id, ...emails.accessRejected({ name: target.name }) });
       req.flash('success', `${target.name}'s request rejected.`);
       break;
     case 'disable':
@@ -138,6 +128,11 @@ router.post('/users/:id/:action', async (req, res) => {
       break;
     case 'reset-mfa':
       await db.query(`UPDATE users SET mfa_method = NULL, totp_secret_enc = NULL, updated_at = now() WHERE id = $1`, [target.id]);
+      mailer.sendQuietly({
+        to: target.email,
+        userId: target.id,
+        ...emails.securityNotice({ name: target.name, what: "An admin reset your two-step verification; you'll set it up again at your next sign-in" }),
+      });
       await db.query(`DELETE FROM user_sessions WHERE (sess ->> 'userId') = $1::text`, [target.id]);
       req.flash('success', `${target.name} will set up two-step verification again at next sign-in.`);
       break;

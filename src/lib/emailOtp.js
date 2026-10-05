@@ -3,6 +3,7 @@
 const crypto = require('crypto');
 const db = require('../db');
 const mailer = require('./mailer');
+const emails = require('./emails');
 const { sha256 } = require('./crypto');
 
 const TTL_MINUTES = 10;
@@ -23,20 +24,17 @@ async function issue(user, purpose = 'login') {
 
   const code = String(crypto.randomInt(0, 1000000)).padStart(6, '0');
   await db.query(`UPDATE email_otps SET consumed_at = now() WHERE user_id = $1 AND purpose = $2 AND consumed_at IS NULL`, [user.id, purpose]);
-  await db.query(
-    `INSERT INTO email_otps (user_id, code_hash, purpose, expires_at) VALUES ($1, $2, $3, now() + ($4 || ' minutes')::interval)`,
+  const row = await db.one(
+    `INSERT INTO email_otps (user_id, code_hash, purpose, expires_at) VALUES ($1, $2, $3, now() + ($4 || ' minutes')::interval) RETURNING id`,
     [user.id, hashCode(user.id, code), purpose, String(TTL_MINUTES)]
   );
-  await mailer.send({
-    to: user.email,
-    subject: `Your GURHA Ratings code: ${code}`,
-    text: `Your verification code is ${code}\n\nIt expires in ${TTL_MINUTES} minutes. If you didn't try to sign in, you can ignore this email.`,
-    html: mailer.wrapHtml(
-      'Your verification code',
-      `<p style="font-size:32px;letter-spacing:6px;font-weight:700;margin:16px 0">${code}</p>
-       <p>This code expires in ${TTL_MINUTES} minutes. If you didn't try to sign in, you can ignore this email.</p>`
-    ),
-  });
+  try {
+    await mailer.send({ to: user.email, userId: user.id, ...emails.code({ code, purpose, minutes: TTL_MINUTES }) });
+  } catch (err) {
+    // Don't leave an unusable code (or a cooldown) behind if it never left the building.
+    await db.query('DELETE FROM email_otps WHERE id = $1', [row.id]);
+    return { sent: false, reason: 'failed', error: err.message };
+  }
   return { sent: true };
 }
 

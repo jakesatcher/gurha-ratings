@@ -33,6 +33,7 @@ async function main() {
   await migrate();
   await backfillNameKeys();
   await bootstrapAdmin();
+  for (const w of require('./lib/mailer').configWarnings()) console.warn(`[email] ${w}`);
   const app = createApp();
   app.listen(config.port, () => console.log(`${config.appName} listening on port ${config.port}`));
 }

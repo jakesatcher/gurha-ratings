@@ -48,6 +48,9 @@ function createApp() {
     }
   });
 
+  // Signed provider webhooks need the raw body, so they're mounted before the body parsers and CSRF.
+  app.use(require('./routes/webhooks'));
+
   app.use('/static', express.static(path.join(__dirname, '..', 'public'), { maxAge: config.isProd ? '7d' : 0 }));
   app.get('/favicon.ico', (req, res) => res.redirect(301, '/static/favicon.svg'));
 

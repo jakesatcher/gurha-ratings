@@ -61,7 +61,7 @@ Approved raters search for players and score them using the official **GURHA Pla
    - `RESEND_API_KEY` (or the `SMTP_*` variables) and `MAIL_FROM`.
 4. Deploy. Migrations run automatically at startup. The health check is `/healthz`.
 5. **Custom domain**: Service → Settings → Networking → *Custom Domain* → `gurha.hockey`. Railway gives you a DNS record to add at your registrar. Use a CNAME (or an ALIAS/flattened CNAME for the root domain), plus a TXT verification record if Railway asks for one. TLS is issued automatically.
-6. **Email**: in Resend, verify the `gurha.hockey` domain by adding the SPF/DKIM DNS records it lists. Then set `MAIL_FROM=GURHA Ratings <no-reply@gurha.hockey>`.
+6. **Email (Resend)**: see [Email](#email) below.
 
 Until email is configured, codes are printed to the server log. That is fine for testing, but not for real users.
 
@@ -76,6 +76,33 @@ Set `SPORTSENGINE_CLIENT_ID`, `SPORTSENGINE_CLIENT_SECRET` and `SPORTSENGINE_ORG
 SportsEngine rejects queries over a complexity budget (101; roughly 1 + page size × nested objects). The app only requests the fields it uses: team ID/name/division, and player name, jersey, position, profile ID, date of birth and SportsEngine ID. It sizes pages to fit the budget, and if the API still reports "Query is too complex", it shrinks the page and retries. A player's profile ID and SportsEngine ID are stored as person-level IDs alongside the roster entry's registration ID, so the same person is recognised across registrations and seasons. Override the budget with `SPORTSENGINE_MAX_COMPLEXITY` if SportsEngine changes it.
 
 The integration authenticates with OAuth client credentials. It reads the GraphQL schema (introspection) and builds every query from the fields your access actually exposes. Teams are filtered to a season by a season argument if `teams` has one, by a season field on the team, or through divisions. Rosters are fetched per team with `team(id)` when available. **Admin → SportsEngine → Diagnostics** runs a dry run that shows the generated query and the raw response. If introspection is disabled for your account, set `SPORTSENGINE_ROSTER_QUERY`.
+
+## Email
+
+Email goes through **Resend's HTTPS API**, which works on Railway even where outbound SMTP is blocked.
+
+**Setup**
+1. In Resend → **Domains**, add `gurha.hockey` (skip this if it's already verified on your account). Add the DNS records Resend lists at your registrar: SPF/MX on the `send` subdomain and the DKIM `resend._domainkey` TXT record. Adding a DMARC record (`_dmarc` TXT, e.g. `v=DMARC1; p=none;`) helps deliverability.
+2. In Resend → **API Keys**, create a key with *Sending access* restricted to `gurha.hockey`.
+3. In Railway, set:
+   - `RESEND_API_KEY` = that key
+   - `MAIL_FROM` = `GURHA Ratings <ratings@gurha.hockey>` (any address on the verified domain)
+   - `MAIL_REPLY_TO` (optional) = where replies should go, e.g. the commissioner's inbox
+4. Redeploy, open **Admin → Email** and click **Send test email**.
+5. *(Optional)* Track deliveries and bounces: in Resend → **Webhooks**, add `https://gurha.hockey/webhooks/resend` for `email.delivered`, `email.bounced`, `email.complained` and `email.delivery_delayed`. Set its signing secret as `RESEND_WEBHOOK_SECRET`. Requests are signature-checked.
+
+**What gets sent**
+
+| Email | To | When |
+|---|---|---|
+| Sign-in / setup code | User | Signing in with email codes, or turning them on |
+| New access request | Admins (each can opt out on their account page) | Someone requests access |
+| Approved / not approved | Requester | An admin approves or rejects the request |
+| Password reset link | User | "Forgot password" |
+| Security notice | User | Password changed or reset, 2-step method changed, or an admin resets their 2-step |
+| Test | Anyone | Admin → Email |
+
+Sends time out after 10 seconds. When Resend rate-limits or errors, the send is retried with the same idempotency key, so no duplicate is sent. If a sign-in code still can't be sent, the user sees a "couldn't send your code" message and can retry immediately. **Admin → Email** shows the provider, sender, warnings (e.g. a `MAIL_FROM` outside `gurha.hockey`) and a log of recent email with its status (sent / delivered / bounced / failed). Codes are never stored in the log.
 
 ## Browsing
 

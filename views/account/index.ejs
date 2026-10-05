@@ -10,6 +10,16 @@
       <dt>Two-step</dt><dd><%= currentUser.mfa_method === 'totp' ? 'Authenticator app' : 'Email codes' %> · <a href="/mfa/setup">Change</a></dd>
     </dl>
   </section>
+  <% if (currentUser.role === 'admin') { %>
+  <section class="card">
+    <h2>Email alerts</h2>
+    <form method="post" action="/account/notifications" class="stack">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <label class="check"><input type="checkbox" name="notify_access_requests" <%= currentUser.notify_access_requests ? 'checked' : '' %>> Email me when someone requests access</label>
+      <button class="btn" type="submit">Save</button>
+    </form>
+  </section>
+  <% } %>
   <section class="card">
     <h2>Change password</h2>
     <form method="post" action="/account/password" class="stack">

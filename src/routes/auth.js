@@ -7,6 +7,7 @@ const QRCode = require('qrcode');
 const config = require('../config');
 const db = require('../db');
 const mailer = require('../lib/mailer');
+const emails = require('../lib/emails');
 const emailOtp = require('../lib/emailOtp');
 const totp = require('../lib/totp');
 const { encrypt, decrypt, sha256, randomToken } = require('../lib/crypto');
@@ -91,21 +92,14 @@ router.post('/register', registerLimiter, async (req, res) => {
       [values.email, values.name, await bcrypt.hash(req.body.password, 12), values.request_note || null]
     );
     await audit(user.id, 'access_requested', 'user', user.id);
-    const admins = await db.many(`SELECT email FROM users WHERE role = 'admin' AND status = 'approved'`);
+    const admins = await db.many(`SELECT id, email FROM users WHERE role = 'admin' AND status = 'approved' AND notify_access_requests`);
+    const { n: pendingCount } = await db.one(`SELECT count(*)::int AS n FROM users WHERE status = 'pending'`);
     for (const a of admins) {
-      mailer
-        .send({
-          to: a.email,
-          subject: `Access request: ${user.name}`,
-          text: `${user.name} (${user.email}) requested rater access.\n\n${values.request_note || ''}\n\nReview: ${config.appUrl}/admin/users`,
-          html: mailer.wrapHtml(
-            'New access request',
-            `<p><strong>${mailer.escapeHtml(user.name)}</strong> (${mailer.escapeHtml(user.email)}) requested rater access.</p>
-             ${values.request_note ? `<p>${mailer.escapeHtml(values.request_note)}</p>` : ''}
-             <p><a href="${config.appUrl}/admin/users">Review pending requests</a></p>`
-          ),
-        })
-        .catch((err) => console.error('Failed to notify admin', err));
+      mailer.sendQuietly({
+        to: a.email,
+        userId: a.id,
+        ...emails.accessRequested({ name: user.name, email: user.email, note: values.request_note, pendingCount }),
+      });
     }
   }
   // Same response whether or not the email already exists, to avoid account enumeration.
@@ -137,7 +131,10 @@ router.post('/login', loginLimiter, async (req, res) => {
   req.session.mfaPending = { userId: user.id, at: Date.now() };
 
   if (!user.mfa_method) return res.redirect('/mfa/setup');
-  if (user.mfa_method === 'email') await emailOtp.issue(user, 'login');
+  if (user.mfa_method === 'email') {
+    const r = await emailOtp.issue(user, 'login');
+    if (r.reason === 'failed') req.flash('error', "We couldn't send your code just now. Wait a moment and tap “Resend code”. If it keeps failing, contact an admin.");
+  }
   res.redirect('/mfa');
 });
 
@@ -173,7 +170,9 @@ router.post('/mfa/email', mfaLimiter, async (req, res) => {
   if (!user || !user.mfa_method) return res.redirect('/login');
   req.session.mfaPending.useEmail = true;
   const r = await emailOtp.issue(user, 'login');
-  req.flash(r.sent ? 'success' : 'info', r.sent ? `We emailed a code to ${user.email}.` : 'A code was just sent. Please wait 30 seconds before requesting another.');
+  if (r.sent) req.flash('success', `We emailed a code to ${user.email}.`);
+  else if (r.reason === 'failed') req.flash('error', "We couldn't send your code just now. Please try again in a moment, or contact an admin.");
+  else req.flash('info', 'A code was just sent. Please wait 30 seconds before requesting another.');
   res.redirect('/mfa');
 });
 
@@ -219,6 +218,10 @@ router.post('/mfa/setup/email', mfaLimiter, async (req, res) => {
   const user = await setupUser(req);
   if (!user) return res.redirect('/login');
   const r = await emailOtp.issue(user, 'enroll');
+  if (r.reason === 'failed') {
+    req.flash('error', "We couldn't send an email to that address just now. Try again in a moment, or use an authenticator app instead.");
+    return res.redirect('/mfa/setup');
+  }
   if (!r.sent) req.flash('info', 'A code was just sent. Please wait 30 seconds before requesting another.');
   res.redirect('/mfa/setup/email');
 });
@@ -242,6 +245,12 @@ router.post('/mfa/setup/email/verify', mfaLimiter, async (req, res) => {
 
 async function finishSetup(req, res, user) {
   if (req.user) {
+    const method = (await db.one('SELECT mfa_method FROM users WHERE id = $1', [user.id])).mfa_method;
+    mailer.sendQuietly({
+      to: user.email,
+      userId: user.id,
+      ...emails.securityNotice({ name: user.name, what: `Two-step verification was changed to ${method === 'totp' ? 'an authenticator app' : 'email codes'}` }),
+    });
     req.flash('success', 'Two-step verification updated.');
     return res.redirect('/account');
   }
@@ -272,16 +281,8 @@ router.post('/forgot', resetLimiter, async (req, res) => {
       sha256(token),
     ]);
     const link = `${config.appUrl}/reset/${token}`;
-    await mailer.send({
-      to: user.email,
-      subject: 'Reset your GURHA Ratings password',
-      text: `Use this link to reset your password (valid for 1 hour):\n${link}\n\nIf you didn't request this, ignore this email.`,
-      html: mailer.wrapHtml(
-        'Reset your password',
-        `<p><a href="${link}" style="display:inline-block;background:#1d4ed8;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none">Choose a new password</a></p>
-         <p>This link is valid for 1 hour. If you didn't request this, ignore this email.</p>`
-      ),
-    });
+    // Quiet send: the response is the same either way, so it can't reveal which emails have accounts.
+    mailer.sendQuietly({ to: user.email, userId: user.id, ...emails.passwordReset({ link }) });
   }
   res.render('auth/forgot', { title: 'Reset password', sent: true });
 });
@@ -308,6 +309,8 @@ router.post('/reset/:token', resetLimiter, async (req, res) => {
     await c.query(`DELETE FROM user_sessions WHERE (sess ->> 'userId') = $1::text`, [reset.user_id]);
   });
   await audit(reset.user_id, 'password_reset', 'user', reset.user_id);
+  const resetUser = await db.one('SELECT id, name, email FROM users WHERE id = $1', [reset.user_id]);
+  mailer.sendQuietly({ to: resetUser.email, userId: resetUser.id, ...emails.securityNotice({ name: resetUser.name, what: 'Your password was reset' }) });
   req.flash('success', 'Password updated. Please sign in.');
   res.redirect('/login');
 });

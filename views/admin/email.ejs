@@ -1,0 +1,63 @@
+<%- include('../partials/head') %>
+<h1>Email</h1>
+<%- include('_nav') %>
+
+<% mail.warnings.forEach(function (w) { %><div class="alert alert-warn"><%= w %></div><% }) %>
+
+<div class="grid-2">
+  <section class="card">
+    <h2>Setup</h2>
+    <dl class="dl">
+      <dt>Provider</dt><dd><%= mail.provider === 'resend' ? 'Resend' : mail.provider === 'smtp' ? 'SMTP' : 'None (printing to server log)' %></dd>
+      <dt>From</dt><dd><code><%= mail.from %></code></dd>
+      <dt>Reply-to</dt><dd><%= mail.replyTo ? mail.replyTo : '—' %></dd>
+      <dt>Delivery tracking</dt><dd><%= mail.webhook ? 'On (Resend webhook)' : 'Off' %></dd>
+      <dt>Last 7 days</dt><dd><%= stats.week %> sent<%= stats.problems ? `, ${stats.problems} problem${stats.problems === 1 ? '' : 's'}` : '' %></dd>
+    </dl>
+    <% if (!mail.webhook && mail.provider === 'resend') { %>
+      <details class="small">
+        <summary>Track deliveries and bounces</summary>
+        <p>In Resend → Webhooks, add an endpoint <code><%= mail.webhookUrl %></code> for <em>email.delivered</em>, <em>email.bounced</em>, <em>email.complained</em> and <em>email.delivery_delayed</em>. Then set its signing secret as <code>RESEND_WEBHOOK_SECRET</code> in Railway.</p>
+      </details>
+    <% } %>
+  </section>
+  <section class="card">
+    <h2>Send a test</h2>
+    <form method="post" action="/admin/email/test" class="stack">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <label>To <input type="email" name="to" placeholder="<%= currentUser.email %>"></label>
+      <button class="btn btn-primary" type="submit">Send test email</button>
+    </form>
+    <h3>Access-request alerts go to</h3>
+    <ul class="list small">
+      <% admins.forEach(function (a) { %><li><%= a.name %> <span class="muted"><%= a.email %></span> <span class="tag <%= a.notify_access_requests ? 'tag-approved' : '' %>"><%= a.notify_access_requests ? 'On' : 'Off' %></span></li><% }) %>
+    </ul>
+    <p class="small muted">Each admin can turn these on or off on their <a href="/account">account page</a>.</p>
+  </section>
+</div>
+
+<section class="card">
+  <div class="page-head">
+    <h2>Recent email</h2>
+    <a class="small" href="/admin/email<%= failedOnly ? '' : '?status=failed' %>"><%= failedOnly ? 'Show all' : 'Show problems only' %></a>
+  </div>
+  <% if (!logRows.length) { %><p class="muted">Nothing sent yet.</p><% } else { %>
+  <div class="table-wrap">
+    <table class="table compact">
+      <thead><tr><th>When</th><th>To</th><th>Email</th><th>Status</th></tr></thead>
+      <tbody>
+        <% logRows.forEach(function (r) { %>
+          <tr>
+            <td class="nowrap small"><%= new Date(r.created_at).toLocaleString('en-US', { timeZone: tz, month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) %></td>
+            <td class="small"><%= r.to_address %><% if (r.user_name) { %><br><span class="muted"><%= r.user_name %></span><% } %></td>
+            <td class="small"><%= r.subject %><br><span class="muted"><%= r.kind.replace(/_/g, ' ') %></span></td>
+            <td><span class="tag tag-<%= ({ sent: 'approved', delivered: 'approved', failed: 'rejected', bounced: 'rejected', complained: 'rejected', delayed: 'pending', console: '' })[r.status] %>"><%= r.status %></span>
+              <% if (r.error) { %><div class="small muted wrap"><%= r.error %></div><% } %></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </div>
+  <% } %>
+</section>
+<%- include('../partials/foot') %>

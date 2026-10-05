@@ -34,7 +34,13 @@ module.exports = {
   },
   mail: {
     from: env.MAIL_FROM || 'GURHA Ratings <no-reply@gurha.hockey>',
+    replyTo: env.MAIL_REPLY_TO || null,
     resendApiKey: env.RESEND_API_KEY,
+    resendApiUrl: env.RESEND_API_URL || 'https://api.resend.com',
+    // Signing secret ("whsec_...") of a Resend webhook pointed at /webhooks/resend (optional).
+    resendWebhookSecret: env.RESEND_WEBHOOK_SECRET || null,
+    // The domain senders should use; a different MAIL_FROM domain is flagged on Admin → Email.
+    expectedDomain: env.MAIL_DOMAIN || 'gurha.hockey',
     smtp: env.SMTP_HOST
       ? {
           host: env.SMTP_HOST,

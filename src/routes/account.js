@@ -5,6 +5,8 @@ const bcrypt = require('bcryptjs');
 const db = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const { audit } = require('../lib/audit');
+const mailer = require('../lib/mailer');
+const emails = require('../lib/emails');
 const { passwordProblem } = require('./auth');
 
 const router = express.Router();
@@ -25,6 +27,15 @@ router.get('/account', requireAuth, async (req, res) => {
   res.render('account/index', { title: 'My account', myRatings, error: null });
 });
 
+router.post('/account/notifications', requireAuth, async (req, res) => {
+  if (req.user.role === 'admin') {
+    const on = req.body.notify_access_requests === 'on';
+    await db.query('UPDATE users SET notify_access_requests = $1, updated_at = now() WHERE id = $2', [on, req.user.id]);
+    req.flash('success', on ? "You'll get an email when someone requests access." : "You won't get access-request emails.");
+  }
+  res.redirect('/account');
+});
+
 router.post('/account/password', requireAuth, async (req, res) => {
   const user = await db.one('SELECT password_hash FROM users WHERE id = $1', [req.user.id]);
   let error = null;
@@ -36,6 +47,7 @@ router.post('/account/password', requireAuth, async (req, res) => {
   }
   await db.query('UPDATE users SET password_hash = $1, updated_at = now() WHERE id = $2', [await bcrypt.hash(req.body.password, 12), req.user.id]);
   await audit(req.user.id, 'password_changed', 'user', req.user.id);
+  mailer.sendQuietly({ to: req.user.email, userId: req.user.id, ...emails.securityNotice({ name: req.user.name, what: 'Your password was changed' }) });
   req.flash('success', 'Password changed.');
   res.redirect('/account');
 });
