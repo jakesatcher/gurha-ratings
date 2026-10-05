@@ -39,8 +39,8 @@ test.before(async () => {
   Object.assign(config.mail, {
     resendApiKey: 're_test_key',
     resendApiUrl: `http://127.0.0.1:${server.address().port}`,
-    from: 'GURHA Ratings <ratings@gurha.hockey>',
-    replyTo: 'commissioner@gurha.hockey',
+    from: 'GURHA Ratings <ratings@robertmagnusmissesthe.net>',
+    replyTo: 'commissioner@robertmagnusmissesthe.net',
     resendWebhookSecret: `whsec_${Buffer.from('super-secret-signing-key').toString('base64')}`,
   });
   await h.resetDb();
@@ -77,9 +77,9 @@ test('sign-in codes go out through Resend with the right payload, and the log ne
   assert.strictEqual(req.url, '/emails');
   assert.strictEqual(req.headers.authorization, 'Bearer re_test_key');
   assert.ok(req.headers['idempotency-key'], 'idempotency key sent');
-  assert.strictEqual(req.body.from, 'GURHA Ratings <ratings@gurha.hockey>');
+  assert.strictEqual(req.body.from, 'GURHA Ratings <ratings@robertmagnusmissesthe.net>');
   assert.deepStrictEqual(req.body.to, ['coder@test.com']);
-  assert.strictEqual(req.body.reply_to, 'commissioner@gurha.hockey');
+  assert.strictEqual(req.body.reply_to, 'commissioner@robertmagnusmissesthe.net');
   assert.deepStrictEqual(req.body.tags, [{ name: 'kind', value: 'code_login' }]);
   assert.match(req.body.subject, /^\d{6} is your GURHA Ratings code$/);
   assert.match(req.body.html, /Your sign-in code/);
@@ -155,7 +155,7 @@ test('admin email page, test send, alert opt-out and security notices', async ()
   // Test email from the admin page
   const page = await boss.get('/admin/email');
   assert.match(page.text, /Resend/);
-  assert.match(page.text, /ratings@gurha\.hockey/);
+  assert.match(page.text, /ratings@robertmagnusmissesthe\.net/);
   const sentTest = await h.post(boss, '/admin/email/test', { to: '' }, '/admin/email');
   assert.strictEqual(sentTest.status, 302);
   assert.ok(resend.requests.some((r) => r.body.to[0] === 'boss@test.com' && r.body.subject === 'GURHA Ratings test email'));
@@ -179,7 +179,7 @@ test('warns when MAIL_FROM is not on the league domain', () => {
   const before = config.mail.from;
   config.mail.from = 'GURHA <me@gmail.com>';
   try {
-    assert.match(mailer.configWarnings().join(' '), /gmail\.com, not gurha\.hockey/);
+    assert.match(mailer.configWarnings().join(' '), /gmail\.com, not robertmagnusmissesthe\.net/);
   } finally {
     config.mail.from = before;
   }

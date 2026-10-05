@@ -1,6 +1,6 @@
 # GURHA Ratings
 
-Player rating system for GURHA Recreational Hockey, at **https://gurha.hockey**.
+Player rating system for GURHA Recreational Hockey, at **https://robertmagnusmissesthe.net**.
 
 Approved raters search for players and score them using the official **GURHA Player Rating Form**. The app averages every rater's scores into a weighted overall score (0–11) and a GURHA level (BEG → A1).
 
@@ -56,11 +56,11 @@ Approved raters search for players and score them using the official **GURHA Pla
 2. Add a **PostgreSQL** database to the project.
 3. On the app service, set these variables (see `.env.example`):
    - `DATABASE_URL` = `${{Postgres.DATABASE_URL}}`
-   - `NODE_ENV=production`, `SESSION_SECRET`, `ENCRYPTION_KEY`, `APP_URL=https://gurha.hockey`
+   - `NODE_ENV=production`, `SESSION_SECRET`, `ENCRYPTION_KEY`, `APP_URL=https://robertmagnusmissesthe.net`
    - `ADMIN_EMAIL`, `ADMIN_PASSWORD`: your first admin account. It is created on first boot.
    - `RESEND_API_KEY` (or the `SMTP_*` variables) and `MAIL_FROM`.
 4. Deploy. Migrations run automatically at startup. The health check is `/healthz`.
-5. **Custom domain**: Service → Settings → Networking → *Custom Domain* → `gurha.hockey`. Railway gives you a DNS record to add at your registrar. Use a CNAME (or an ALIAS/flattened CNAME for the root domain), plus a TXT verification record if Railway asks for one. TLS is issued automatically.
+5. **Custom domain**: Service → Settings → Networking → *Custom Domain* → `robertmagnusmissesthe.net`. Railway gives you a DNS record to add at your registrar. Use a CNAME (or an ALIAS/flattened CNAME for the root domain), plus a TXT verification record if Railway asks for one. TLS is issued automatically.
 6. **Email (Resend)**: see [Email](#email) below.
 
 Until email is configured, codes are printed to the server log. That is fine for testing, but not for real users.
@@ -82,14 +82,14 @@ The integration authenticates with OAuth client credentials. It reads the GraphQ
 Email goes through **Resend's HTTPS API**, which works on Railway even where outbound SMTP is blocked.
 
 **Setup**
-1. In Resend → **Domains**, add `gurha.hockey` (skip this if it's already verified on your account). Add the DNS records Resend lists at your registrar: SPF/MX on the `send` subdomain and the DKIM `resend._domainkey` TXT record. Adding a DMARC record (`_dmarc` TXT, e.g. `v=DMARC1; p=none;`) helps deliverability.
-2. In Resend → **API Keys**, create a key with *Sending access* restricted to `gurha.hockey`.
+1. In Resend → **Domains**, add `robertmagnusmissesthe.net` (skip this if it's already verified on your account). Add the DNS records Resend lists at your registrar: SPF/MX on the `send` subdomain and the DKIM `resend._domainkey` TXT record. Adding a DMARC record (`_dmarc` TXT, e.g. `v=DMARC1; p=none;`) helps deliverability.
+2. In Resend → **API Keys**, create a key with *Sending access* restricted to `robertmagnusmissesthe.net`.
 3. In Railway, set:
    - `RESEND_API_KEY` = that key
-   - `MAIL_FROM` = `GURHA Ratings <ratings@gurha.hockey>` (any address on the verified domain)
+   - `MAIL_FROM` = `GURHA Ratings <ratings@robertmagnusmissesthe.net>` (any address on the verified domain)
    - `MAIL_REPLY_TO` (optional) = where replies should go, e.g. the commissioner's inbox
 4. Redeploy, open **Admin → Email** and click **Send test email**.
-5. *(Optional)* Track deliveries and bounces: in Resend → **Webhooks**, add `https://gurha.hockey/webhooks/resend` for `email.delivered`, `email.bounced`, `email.complained` and `email.delivery_delayed`. Set its signing secret as `RESEND_WEBHOOK_SECRET`. Requests are signature-checked.
+5. *(Optional)* Track deliveries and bounces: in Resend → **Webhooks**, add `https://robertmagnusmissesthe.net/webhooks/resend` for `email.delivered`, `email.bounced`, `email.complained` and `email.delivery_delayed`. Set its signing secret as `RESEND_WEBHOOK_SECRET`. Requests are signature-checked.
 
 **What gets sent**
 
@@ -102,7 +102,7 @@ Email goes through **Resend's HTTPS API**, which works on Railway even where out
 | Security notice | User | Password changed or reset, 2-step method changed, or an admin resets their 2-step |
 | Test | Anyone | Admin → Email |
 
-Sends time out after 10 seconds. When Resend rate-limits or errors, the send is retried with the same idempotency key, so no duplicate is sent. If a sign-in code still can't be sent, the user sees a "couldn't send your code" message and can retry immediately. **Admin → Email** shows the provider, sender, warnings (e.g. a `MAIL_FROM` outside `gurha.hockey`) and a log of recent email with its status (sent / delivered / bounced / failed). Codes are never stored in the log.
+Sends time out after 10 seconds. When Resend rate-limits or errors, the send is retried with the same idempotency key, so no duplicate is sent. If a sign-in code still can't be sent, the user sees a "couldn't send your code" message and can retry immediately. **Admin → Email** shows the provider, sender, warnings (e.g. a `MAIL_FROM` outside `robertmagnusmissesthe.net`) and a log of recent email with its status (sent / delivered / bounced / failed). Codes are never stored in the log.
 
 ## Browsing
 
