@@ -75,6 +75,7 @@ function createApp() {
     res.locals.url = req.originalUrl;
     res.locals.levels = levels;
     res.locals.title = null;
+    res.locals.tz = config.timeZone;
     res.locals.currentUser = null;
     res.locals.csrfToken = '';
     res.locals.flash = [];
@@ -88,7 +89,14 @@ function createApp() {
       if (now.getUTCMonth() < b.getUTCMonth() || (now.getUTCMonth() === b.getUTCMonth() && now.getUTCDate() < b.getUTCDate())) age--;
       return age;
     };
-    res.locals.fmtDate = (d) => (d ? new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : '');
+    // Date-only values ('YYYY-MM-DD') are shown as-is; timestamps in the league's time zone.
+    res.locals.fmtDate = (d) => {
+      if (!d) return '';
+      const dateOnly = typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d);
+      return new Date(d).toLocaleDateString('en-US', {
+        year: 'numeric', month: 'short', day: 'numeric', timeZone: dateOnly ? 'UTC' : config.timeZone,
+      });
+    };
     next();
   });
 

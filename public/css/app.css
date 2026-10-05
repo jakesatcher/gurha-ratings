@@ -353,3 +353,13 @@ legend h2 { margin: 0; }
 .team-preview summary { display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding: .3rem .75rem; cursor: pointer; }
 .team-preview summary label { margin: 0; }
 .team-preview .table-wrap { padding: 0 .5rem .5rem; }
+.membership { border: 1px solid var(--border); border-radius: 10px; padding: .5rem .75rem; margin-bottom: .6rem; background: var(--surface-2); }
+.membership legend { float: none; width: auto; padding: 0 .25rem; margin: 0; }
+.membership .inline-form label { margin: 0; flex: 1 1 120px; }
+.membership .inline-form label.check { flex: 0 0 auto; }
+.dup-grid { display: grid; gap: .75rem; grid-template-columns: 1fr; }
+@media (min-width: 700px) { .dup-grid { grid-template-columns: 1fr 1fr; } }
+.dup-person { border: 1px solid var(--border); border-radius: 10px; padding: .6rem .75rem; background: var(--surface-2); }
+.dup-pair .actions .btn { white-space: normal; text-align: left; }
+.team-chips { list-style: none; padding: 0; margin: .35rem 0 0; display: flex; flex-wrap: wrap; gap: .35rem; }
+.team-chips li { background: var(--surface-2); border: 1px solid var(--border); border-radius: 999px; padding: .1rem .6rem; font-size: .85rem; }

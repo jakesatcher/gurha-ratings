@@ -8,7 +8,12 @@
     <div>
       <h1><%= player.first_name %> <%= player.last_name %>
         <% if (!player.active) { %><span class="tag">inactive</span><% } %></h1>
-      <p class="muted"><%= [player.team, player.division, posName[player.position], ageOf(player) ? `Age ${ageOf(player)}` : null].filter(Boolean).join(' · ') || 'No team info' %></p>
+      <p class="muted"><%= [posName[player.position], ageOf(player) ? `Age ${ageOf(player)}` : null].filter(Boolean).join(' · ') %></p>
+      <% if (player.memberships && player.memberships.length) { %>
+        <ul class="team-chips"><% player.memberships.forEach(function (m) { %>
+          <li><%= m.team || 'No team' %><%= m.division ? ` · ${m.division}` : '' %><%= m.jersey_number ? ` · #${m.jersey_number}` : '' %><% if (m.is_sub) { %> <span class="tag">Sub</span><% } %></li>
+        <% }) %></ul>
+      <% } %>
     </div>
   </div>
   <div class="hero-level">
@@ -91,7 +96,7 @@
            const delta = prev && h.summary.avgOverall !== null ? h.summary.avgOverall - prev.summary.avgOverall : null; %>
         <tr class="<%= season && h.season_id === season.id ? 'current-row' : '' %>">
           <td><%= h.season_name %></td>
-          <td><%= h.team || '—' %><span class="hide-sm"><%= h.division ? ` (${h.division})` : '' %></span></td>
+          <td><%= h.teams || '—' %></td>
           <td class="num hide-sm"><%= h.jersey_number || '' %></td>
           <td class="num"><%= fmt(h.summary.avgOverall) %></td>
           <td><%- include('../partials/level', { level: h.summary.count || h.summary.overridden ? h.summary.level : null }) %></td>

@@ -2,7 +2,7 @@
 
 // Parses a SportsEngine roster export (.xls): one worksheet per team, laid out as
 //
-//   League    | GURHA UPSTATE RECREATIONAL HOCKEY 2026
+//   League    | GURHA UPSTATE RECREATIONAL HOCKEY 2026   (always GURHA; not used)
 //   Division  | C1B2 DIVISION
 //   Season    | GURHA SPRING/FALL 2026 | FALL SEASON 2026
 //   Team      | 1 ACE LANDSCAPING      | 10535551        (team name, SportsEngine team ID)
@@ -13,8 +13,10 @@
 // Labels and columns are located by name, not position, so reordered or extra columns are fine.
 const { readWorkbook, excelSerialToISO } = require('./xls');
 const { normalizePosition, parseDate } = require('./players');
+const { normalizeName } = require('./identity');
 
-const META_LABELS = ['league', 'division', 'season', 'team'];
+// The League row is always Greer Upstate Recreational Hockey League (GURHA), so it's ignored.
+const META_LABELS = ['division', 'season', 'team'];
 const COLUMNS = {
   external_id: ['sportngin id', 'sportsengine id', 'sport ngin id', 'se id', 'member id', 'id'],
   jersey_number: ['jersey #', 'jersey', 'jersey number', 'number', '#', 'no.'],
@@ -77,8 +79,10 @@ function parseSheet(sheet) {
     const row = rows[r] || [];
     if (!row.some((v) => text(v) !== '')) continue;
     const get = (f) => (cols[f] === undefined ? null : row[cols[f]]);
-    const first = text(get('first_name'));
-    const last = text(get('last_name'));
+    // "Hassan (Sub)" → "Hassan", flagged as a sub spot on this team.
+    const name = normalizeName(text(get('first_name')), text(get('last_name')));
+    const first = name.first_name;
+    const last = name.last_name;
     if (!first || !last) {
       problems.push(`Row ${r + 1}: missing first or last name`);
       continue;
@@ -93,8 +97,9 @@ function parseSheet(sheet) {
       jersey_number: idText(get('jersey_number')).replace(/^#/, '') || null,
       first_name: first,
       last_name: last,
-      position: normalizePosition(rawPos),
+      position: normalizePosition(rawPos) || name.position,
       birth_date: birth,
+      is_sub: name.isSub,
       row: r + 1,
     });
     if (rawPos && !normalizePosition(rawPos)) problems.push(`Row ${r + 1} (${first} ${last}): unknown position "${rawPos}"`);
@@ -102,7 +107,6 @@ function parseSheet(sheet) {
 
   return {
     sheet: sheet.name,
-    league: text((meta.league || [])[0]) || null,
     // "C1B2 DIVISION" → "C1B2"
     division: text((meta.division || [])[0]).replace(/\s+division$/i, '') || null,
     season: (meta.season || []).map(text).filter(Boolean),
@@ -114,7 +118,7 @@ function parseSheet(sheet) {
   };
 }
 
-// Returns { league, seasonParts, suggestedSeasonName, teams[], errors[] }.
+// Returns { seasonParts, suggestedSeasonName, teams[], errors[] }.
 function parseSportsEngineExport(buffer) {
   const sheets = readWorkbook(buffer);
   const teams = [];
@@ -127,27 +131,21 @@ function parseSportsEngineExport(buffer) {
   }
   if (!teams.length) throw new Error(errors[0] || 'No team sheets were found in this workbook.');
 
-  // A player listed on two teams keeps one roster entry per season; note it for the admin.
-  const seen = new Map();
+  // Same name on one team with different dates of birth = two different people; say so.
   for (const t of teams) {
-    const names = new Map();
+    const byName = new Map();
     for (const p of t.players) {
-      const name = `${p.first_name} ${p.last_name}`.toLowerCase();
-      if (names.has(name) && names.get(name) !== p.external_id) {
-        t.problems.push(`Two players named ${p.first_name} ${p.last_name} (different SportsEngine IDs); they'll be imported as separate players`);
+      const key = `${p.first_name} ${p.last_name}`.toLowerCase();
+      const other = byName.get(key);
+      if (other && other.birth_date !== p.birth_date) {
+        t.problems.push(`Two players named ${p.first_name} ${p.last_name} with different dates of birth; they'll be kept as separate players`);
       }
-      names.set(name, p.external_id);
-    }
-    for (const p of t.players) {
-      const key = p.external_id || `${p.first_name.toLowerCase()}|${p.last_name.toLowerCase()}`;
-      if (seen.has(key)) t.problems.push(`${p.first_name} ${p.last_name} is also on ${seen.get(key)}; the last team imported becomes their team this season`);
-      else seen.set(key, t.team);
+      byName.set(key, p);
     }
   }
 
   const seasonParts = teams.find((t) => t.season.length)?.season || [];
   return {
-    league: teams.find((t) => t.league)?.league || null,
     seasonParts,
     // "FALL SEASON 2026" is more specific than "GURHA SPRING/FALL 2026"; prefer the last part.
     suggestedSeasonName: seasonParts.length ? seasonParts[seasonParts.length - 1] : '',

@@ -157,8 +157,8 @@ test('admin imports SportsEngine seasons and teams; players carry across seasons
   });
   assert.match(imp2.text, /<strong>0<\/strong> new players, <strong>1<\/strong> existing/);
   const sam = await h.db.many(
-    `SELECT s.name, sp.jersey_number FROM players p JOIN season_players sp ON sp.player_id = p.id JOIN seasons s ON s.id = sp.season_id
-      WHERE p.external_id = 'se:p1' ORDER BY s.name`);
+    `SELECT s.name, x.jersey_number FROM (${h.SPOTS}) x JOIN seasons s ON s.id = x.season_id
+      WHERE x.player_id = ${h.byExt('se:p1')} ORDER BY s.name`);
   assert.deepStrictEqual(sam.map((r) => `${r.name} #${r.jersey_number}`), ['2024-25 #4', '2025-26 #12']);
 
   // Re-importing the same season updates in place

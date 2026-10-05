@@ -2,7 +2,8 @@
 
 const { parse } = require('csv-parse/sync');
 const db = require('../db');
-const { findOrCreateTeam, upsertSeasonPlayer } = require('./roster');
+const { findOrCreateTeam, ensureSeasonPlayer, upsertMembership } = require('./roster');
+const { normalizeName, nameKey, matchPlayer, linkExternalId } = require('./identity');
 
 const FIELD_ALIASES = {
   first_name: ['first_name', 'firstname', 'first', 'given_name', 'givenname'],
@@ -17,6 +18,7 @@ const FIELD_ALIASES = {
   external_id: ['external_id', 'externalid', 'id', 'player_id', 'playerid', 'sportsengine_id', 'member_id'],
   team_external_id: ['team_external_id'],
   birth_date: ['birth_date', 'date_of_birth', 'dob', 'birthdate'],
+  is_sub: ['is_sub', 'sub', 'substitute'],
   notes: ['notes', 'note', 'comments'],
 };
 
@@ -73,6 +75,12 @@ function normalizePlayer(raw) {
     }
   }
   if (!first || !last) return { error: 'Missing first/last name' };
+  // "Hassan (Sub)" → last name "Hassan", marked as a sub on this team.
+  const clean = normalizeName(first, last);
+  if (!clean.first_name || !clean.last_name) return { error: 'Missing first/last name' };
+  first = clean.first_name;
+  last = clean.last_name;
+  const subRaw = pickField(row, 'is_sub');
   const ageRaw = pickField(row, 'age');
   const age = ageRaw && /^\d{1,3}$/.test(ageRaw) ? Number(ageRaw) : null;
   return {
@@ -81,12 +89,13 @@ function normalizePlayer(raw) {
     jersey_number: (pickField(row, 'jersey_number') || '').replace(/^#/, '').slice(0, 10) || null,
     team: pickField(row, 'team'),
     division: pickField(row, 'division'),
-    position: normalizePosition(pickField(row, 'position')),
+    position: normalizePosition(pickField(row, 'position')) || clean.position,
     age: age && age > 0 && age < 120 ? age : null,
     email: pickField(row, 'email'),
     external_id: pickField(row, 'external_id'),
     team_external_id: pickField(row, 'team_external_id'),
     birth_date: parseDate(pickField(row, 'birth_date')),
+    is_sub: clean.isSub || (subRaw !== null && ['1', 'true', 'yes', 'y', 'sub', 'x'].includes(subRaw.toLowerCase())),
     notes: pickField(row, 'notes'),
   };
 }
@@ -103,47 +112,13 @@ function parseUpload(buffer, filename = '') {
   return parse(text, { columns: true, skip_empty_lines: true, trim: true, relax_column_count: true });
 }
 
-const PLAYER_FIELDS = ['first_name', 'last_name', 'age', 'birth_date', 'email', 'notes'];
-
-// Finds an existing player for an imported record: external id → name + team this season → email → unique name.
-// Fallback matches never link to a player with a different external id or date of birth: two people
-// can share a name (even on the same team), and those are what tell them apart.
-async function findPlayer(client, seasonId, p) {
-  const q = async (sql, params) => (await client.query(sql, params)).rows;
-  if (p.external_id) {
-    const r = await q('SELECT id FROM players WHERE external_id = $1', [p.external_id]);
-    if (r.length) return r[0];
-  }
-  const compatible = `(pl.external_id IS NULL OR $X::text IS NULL OR pl.external_id = $X)
-                      AND (pl.birth_date IS NULL OR $Y::date IS NULL OR pl.birth_date = $Y)`;
-  const withGuards = (sql, params) => {
-    const x = params.length + 1;
-    const y = params.length + 2;
-    return q(sql.replace('$GUARD', compatible.replace(/\$X/g, `$${x}`).replace(/\$Y/g, `$${y}`)), [...params, p.external_id || null, p.birth_date || null]);
-  };
-  if (p.team) {
-    const r = await withGuards(
-      `SELECT pl.id FROM players pl JOIN season_players sp ON sp.player_id = pl.id JOIN teams t ON t.id = sp.team_id
-        WHERE sp.season_id = $1 AND lower(t.name) = lower($2) AND lower(pl.first_name) = lower($3) AND lower(pl.last_name) = lower($4) AND $GUARD`,
-      [seasonId, p.team, p.first_name, p.last_name]
-    );
-    if (r.length === 1) return r[0];
-  }
-  if (p.email) {
-    const r = await withGuards('SELECT pl.id FROM players pl WHERE lower(pl.email) = lower($1) AND $GUARD', [p.email]);
-    if (r.length === 1) return r[0];
-  }
-  const r = await withGuards(
-    'SELECT pl.id FROM players pl WHERE lower(pl.first_name) = lower($1) AND lower(pl.last_name) = lower($2) AND $GUARD',
-    [p.first_name, p.last_name]
-  );
-  return r.length === 1 ? r[0] : null;
-}
-
-// Inserts or updates players and their roster entries for a season.
-async function upsertPlayers(rawRows, source, seasonId, client = db) {
+// Inserts or updates people and their team spots for a season.
+// Returns counts plus `matches`: how each row was resolved (for the import report).
+// Pass the same `seen` Set across calls that make up one import so people count once.
+async function upsertPlayers(rawRows, source, seasonId, client = db, { seen } = {}) {
   if (!seasonId) throw new Error('Choose a season to import into.');
-  const result = { created: 0, updated: 0, skipped: 0, errors: [] };
+  const result = { created: 0, updated: 0, skipped: 0, errors: [], matches: [], ambiguous: [] };
+  const seenThisImport = seen || new Set();
   for (let i = 0; i < rawRows.length; i++) {
     const p = normalizePlayer(rawRows[i]);
     if (p.error) {
@@ -151,40 +126,68 @@ async function upsertPlayers(rawRows, source, seasonId, client = db) {
       result.errors.push(`Row ${i + 1}: ${p.error}`);
       continue;
     }
-    let player = await findPlayer(client, seasonId, p);
+    const match = await matchPlayer(client, { ...p, seasonId });
+    let player = match.player;
     if (player) {
-      const sets = [];
-      const vals = [];
-      for (const f of PLAYER_FIELDS) {
-        if (p[f] !== null && p[f] !== undefined) {
-          vals.push(p[f]);
-          sets.push(`${f} = $${vals.length}`);
-        }
+      // Keep the stored name (admins may have corrected it); fill in anything we didn't know.
+      await client.query(
+        `UPDATE players SET birth_date = coalesce(birth_date, $1), email = coalesce(email, $2), age = coalesce(age, $3),
+                active = true, updated_at = now() WHERE id = $4`,
+        [p.birth_date, p.email, p.age, player.id]
+      );
+      if (seenThisImport.has(player.id)) result.matches.push({ row: i + 1, name: `${p.first_name} ${p.last_name}`, player_id: player.id, how: `same person as an earlier row (${match.how})` });
+      else {
+        result.updated++;
+        if (match.how !== 'registration ID') result.matches.push({ row: i + 1, name: `${p.first_name} ${p.last_name}`, player_id: player.id, how: match.how });
       }
-      vals.push(p.external_id || null);
-      sets.push(`external_id = coalesce(external_id, $${vals.length})`);
-      // birth_date is in PLAYER_FIELDS, so a known date is only ever filled in, never contradicted (see findPlayer).
-      vals.push(player.id);
-      await client.query(`UPDATE players SET ${sets.join(', ')}, active = true, updated_at = now() WHERE id = $${vals.length}`, vals);
-      result.updated++;
     } else {
       player = (
         await client.query(
-          `INSERT INTO players (first_name, last_name, age, birth_date, email, notes, external_id, source) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
-          [...PLAYER_FIELDS.map((f) => p[f]), p.external_id, source]
+          `INSERT INTO players (first_name, last_name, name_key, age, birth_date, email, notes, source)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+          [p.first_name, p.last_name, nameKey(p.first_name, p.last_name), p.age, p.birth_date, p.email, p.notes, source]
         )
       ).rows[0];
       result.created++;
+      if (match.ambiguous.length) result.ambiguous.push({ row: i + 1, name: `${p.first_name} ${p.last_name}`, player_id: player.id });
     }
+    seenThisImport.add(player.id);
+    await linkExternalId(client, player.id, p.external_id, source);
     const team = await findOrCreateTeam(client, seasonId, { name: p.team, division: p.division, external_id: p.team_external_id });
-    await upsertSeasonPlayer(client, seasonId, player.id, {
+    const spId = await ensureSeasonPlayer(client, seasonId, player.id, source);
+    await upsertMembership(client, spId, {
       team_id: team && team.id,
       jersey_number: p.jersey_number,
       position: p.position,
+      is_sub: p.is_sub,
+      registration_id: p.external_id,
       source,
     });
   }
   return result;
 }
 
-module.exports = { normalizePlayer, normalizePosition, parseDate, parseUpload, upsertPlayers };
+// Read-only dry run of upsertPlayers' matching for the import review screen.
+// Returns one { status, how, player_id } per row: 'existing' | 'duplicate-in-file' | 'new' | 'new-ambiguous'.
+async function previewPlayers(rawRows, seasonId, client = db) {
+  const inFile = new Map(); // name key → [{ birth_date, label }]
+  const out = [];
+  for (const raw of rawRows) {
+    const p = normalizePlayer(raw);
+    if (p.error) {
+      out.push({ status: 'error', how: p.error });
+      continue;
+    }
+    const key = nameKey(p.first_name, p.last_name);
+    const earlier = (inFile.get(key) || []).find((e) => !e.birth_date || !p.birth_date || e.birth_date === p.birth_date);
+    const match = await matchPlayer(client, { ...p, seasonId });
+    if (match.player) out.push({ status: 'existing', how: match.how, player_id: match.player.id, also: earlier ? earlier.label : null });
+    else if (earlier) out.push({ status: 'duplicate-in-file', how: `same person as ${earlier.label}` });
+    else out.push({ status: match.ambiguous.length ? 'new-ambiguous' : 'new', how: match.ambiguous.length ? 'several players share this name' : null });
+    if (!inFile.has(key)) inFile.set(key, []);
+    inFile.get(key).push({ birth_date: p.birth_date, label: raw.__label || `row ${out.length}` });
+  }
+  return out;
+}
+
+module.exports = { normalizePlayer, normalizePosition, parseDate, parseUpload, upsertPlayers, previewPlayers };

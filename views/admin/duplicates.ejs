@@ -1,0 +1,54 @@
+<%- include('../partials/head') %>
+<h1>Possible duplicates</h1>
+<%- include('_nav') %>
+<p class="muted">SportsEngine gives a player a new ID each time they register, so the same person can come in more than once (with a nickname, or without a date of birth). Merge records that are the same person. Their rosters are combined and they're rated once per season. If two people really are different, mark them as different and the pair won't be shown again.</p>
+
+<% const exact = pairs.filter(function (p) { return p.reason === 'Same name and date of birth'; }).length; %>
+<% if (exact) { %>
+  <section class="card">
+    <p><strong><%= exact %></strong> pair<%= exact === 1 ? ' has' : 's have' %> the same name <em>and</em> date of birth, so they're almost certainly the same person registered more than once.</p>
+    <form method="post" action="/admin/duplicates/merge-exact" data-confirm="Merge all <%= exact %> exact matches? Rosters and registration IDs are combined; if one rater rated both records in a season, the earlier rating is kept.">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <button class="btn btn-primary" type="submit">Merge all exact matches</button>
+    </form>
+  </section>
+<% } %>
+<% if (!pairs.length) { %>
+  <div class="card center"><p>No possible duplicates right now. 🎉</p></div>
+<% } %>
+
+<% const card = function (p) { %>
+  <div class="dup-person">
+    <a href="/players/<%= p.id %>"><strong><%= p.first_name %> <%= p.last_name %></strong></a>
+    <div class="small"><%= p.birth_date ? `Born ${fmtDate(p.birth_date)} (age ${ageOf(p)})` : 'No date of birth' %></div>
+    <% p.seasons.forEach(function (s) { %><div class="small muted"><%= s.season_name %>: <%= s.teams || 'no team' %></div><% }) %>
+    <div class="small muted"><%= p.rating_count %> rating<%= p.rating_count === 1 ? '' : 's' %><%= p.external_ids.length ? ` · reg. ${p.external_ids.map(function (x) { return x.replace(/^se:/, ''); }).join(', ')}` : '' %></div>
+  </div>
+<% } %>
+
+<% pairs.forEach(function (pair) { const a = cards.get(pair.a_id); const b = cards.get(pair.b_id); if (!a || !b) return; %>
+  <section class="card dup-pair">
+    <p class="small"><span class="tag tag-pending"><%= pair.reason %></span></p>
+    <div class="dup-grid">
+      <% card(a) %>
+      <% card(b) %>
+    </div>
+    <div class="actions">
+      <% [[a, b], [b, a]].forEach(function (kd) { %>
+        <form method="post" action="/admin/players/merge" class="inline" data-confirm="Keep <%= kd[0].first_name %> <%= kd[0].last_name %> and merge the other record into it? This can't be undone.">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+          <input type="hidden" name="keep_id" value="<%= kd[0].id %>">
+          <input type="hidden" name="drop_id" value="<%= kd[1].id %>">
+          <button class="btn btn-small btn-primary" type="submit">Keep “<%= kd[0].first_name %> <%= kd[0].last_name %>”<%= kd[0].birth_date ? '' : ' (no DOB)' %>, merge</button>
+        </form>
+      <% }) %>
+      <form method="post" action="/admin/duplicates/distinct" class="inline">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <input type="hidden" name="a" value="<%= a.id %>">
+        <input type="hidden" name="b" value="<%= b.id %>">
+        <button class="btn btn-small" type="submit">Different people</button>
+      </form>
+    </div>
+  </section>
+<% }) %>
+<%- include('../partials/foot') %>

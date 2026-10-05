@@ -8,6 +8,17 @@
     <strong><%= result.created %></strong> new players, <strong><%= result.updated %></strong> existing players updated, <strong><%= result.skipped %></strong> skipped.
     <% if (result.errors.length) { %><ul class="small"><% result.errors.slice(0, 50).forEach(function (e) { %><li><%= e %></li><% }) %></ul><% } %>
   </div>
+  <% if (result.matches.length) { %>
+    <details class="card"><summary><strong><%= result.matches.length %></strong> row<%= result.matches.length === 1 ? ' was' : 's were' %> linked to an existing player without a known SportsEngine ID</summary>
+      <ul class="small"><% result.matches.forEach(function (m) { %>
+        <li><a href="/players/<%= m.player_id %>"><%= m.name %></a> (<%= m.team %>, row <%= m.row %>): <%= m.how %></li>
+      <% }) %></ul>
+    </details>
+  <% } %>
+  <% if (result.ambiguous.length) { %>
+    <div class="alert alert-warn"><strong><%= result.ambiguous.length %></strong> new player<%= result.ambiguous.length === 1 ? ' shares' : 's share' %> a name with several existing players and couldn't be matched automatically.
+      <a href="/admin/duplicates">Review possible duplicates</a>.</div>
+  <% } %>
   <p class="actions">
     <a class="btn btn-primary" href="/players">View <%= importSeason.name %> players</a>
     <a class="btn" href="/admin/seasons/<%= importSeason.id %>">Season settings</a>
@@ -19,9 +30,14 @@
     <h2>Review</h2>
     <p class="small muted wrap"><%= pending.filename %></p>
     <dl class="dl">
-      <% if (p.league) { %><dt>League</dt><dd><%= p.league %></dd><% } %>
       <% if (p.seasonParts.length) { %><dt>Season</dt><dd><%= p.seasonParts.join(' · ') %></dd><% } %>
-      <dt>Found</dt><dd><strong><%= p.teams.length %></strong> teams, <strong><%= total %></strong> players</dd>
+      <dt>Found</dt><dd><strong><%= p.teams.length %></strong> teams, <strong><%= total %></strong> roster rows → <strong><%= counts.people %></strong> people</dd>
+      <dt>Matching</dt><dd>
+        <span class="tag tag-approved"><%= counts.existing || 0 %> existing</span>
+        <span class="tag"><%= (counts.new || 0) + (counts['new-ambiguous'] || 0) %> new</span>
+        <% if (counts.multiTeam > 0) { %><span class="tag tag-pending"><%= counts.multiTeam %> extra roster spot<%= counts.multiTeam === 1 ? '' : 's' %> (people on more than one team)</span><% } %>
+        <% if (counts['new-ambiguous']) { %><span class="tag tag-warn"><%= counts['new-ambiguous'] %> need review</span><% } %>
+      </dd>
     </dl>
     <% if (p.errors.length) { %><div class="alert alert-warn"><ul><% p.errors.forEach(function (e) { %><li><%= e %></li><% }) %></ul></div><% } %>
     <% if (problems) { %>
@@ -44,9 +60,17 @@
             <span class="small muted"><%= t.players.length %> players<%= t.team_external_id ? '' : ' · no team ID' %></span>
           </summary>
           <div class="table-wrap"><table class="table compact">
-            <thead><tr><th class="num">#</th><th>Name</th><th>Pos</th><th>Age</th><th class="hide-sm">SportsEngine ID</th></tr></thead>
-            <tbody><% t.players.forEach(function (pl) { %>
-              <tr><td class="num"><%= pl.jersey_number || '' %></td><td><%= pl.last_name %>, <%= pl.first_name %></td><td><%= pl.position || '' %></td><td><%= ageOf(pl) ?? '' %></td><td class="hide-sm small muted"><%= pl.external_id ? pl.external_id.slice(3) : '' %></td></tr>
+            <thead><tr><th class="num">#</th><th>Name</th><th>Pos</th><th>Age</th><th>Match</th></tr></thead>
+            <tbody><% t.players.forEach(function (pl, j) { const st = preview[i][j] || {}; %>
+              <tr><td class="num"><%= pl.jersey_number || '' %></td>
+                <td><%= pl.last_name %>, <%= pl.first_name %><% if (pl.is_sub) { %> <span class="tag">Sub</span><% } %></td>
+                <td><%= pl.position || '' %></td><td><%= ageOf(pl) ?? '' %></td>
+                <td class="small">
+                  <% if (st.status === 'existing') { %><a href="/players/<%= st.player_id %>" class="tag tag-approved" title="<%= st.how %>">Existing</a><% if (st.also) { %> <span class="muted">also <%= st.also %></span><% } %>
+                  <% } else if (st.status === 'duplicate-in-file') { %><span class="tag tag-pending" title="<%= st.how %>">Same person</span> <span class="muted"><%= st.how.replace('same person as ', 'as ') %></span>
+                  <% } else if (st.status === 'new-ambiguous') { %><span class="tag tag-warn" title="<%= st.how %>">New · review</span>
+                  <% } else { %><span class="tag">New</span><% } %>
+                </td></tr>
             <% }) %></tbody>
           </table></div>
         </details>
@@ -63,7 +87,7 @@
       <% localSeasons.forEach(function (s) { %>
         <label class="check"><input type="radio" name="target" value="<%= s.id %>" <%= match && match.id === s.id ? 'checked' : '' %>> <%= s.name %><%= s.is_current ? ' (current)' : '' %></label>
       <% }) %>
-      <p class="small muted">Players are matched to existing players by SportsEngine ID, then by name, so their history carries across seasons. Existing jersey numbers and positions are only replaced when the file has a value. Nobody is deleted.</p>
+      <p class="small muted">SportNgin IDs change with every registration, so people are matched by a known ID, then by name + date of birth ("(Sub)" and similar tags are ignored). A person on several teams gets one record, with a roster spot on each team, and is rated once per season. Existing jersey numbers and positions are only replaced when the file has a value. Nobody is deleted.</p>
     </section>
     <div class="actions">
       <button class="btn btn-primary" type="submit">Import selected teams</button>

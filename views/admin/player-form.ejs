@@ -17,32 +17,63 @@
     <label>Notes <textarea name="notes" rows="2" maxlength="2000"><%= player.notes || '' %></textarea></label>
     <% if (!isNew) { %>
       <label class="check"><input type="checkbox" name="active" <%= player.active ? 'checked' : '' %>> Active (visible to raters)</label>
-      <% if (player.external_id) { %><p class="small muted">External ID: <%= player.external_id %> · source: <%= player.source %></p><% } %>
+      <% if (externalIds.length) { %><p class="small muted">SportsEngine registration IDs: <%= externalIds.map(function (x) { return x.replace(/^se:/, ''); }).join(', ') %></p><% } %>
     <% } %>
 
     <h2><%= season.name %> roster</h2>
     <% if (!isNew) { %>
       <label class="check"><input type="checkbox" name="on_roster" <%= entry.on_roster ? 'checked' : '' %>> On the <%= season.name %> roster</label>
     <% } %>
+    <% const posOpts = [['', '—'], ['F', 'Forward'], ['D', 'Defense'], ['G', 'Goaltender']]; %>
+    <% (entry.memberships || []).forEach(function (m) { %>
+      <fieldset class="membership">
+        <input type="hidden" name="membership_ids" value="<%= m.id %>">
+        <legend><strong><%= m.team || 'No team' %></strong><%= m.division ? ` · ${m.division}` : '' %><% if (m.registration_id) { %> <span class="small muted">· reg. <%= m.registration_id.replace(/^se:/, '') %></span><% } %></legend>
+        <div class="inline-form">
+          <label>Jersey <input name="m_<%= m.id %>_jersey" value="<%= m.jersey_number || '' %>" inputmode="numeric" maxlength="10"></label>
+          <label>Position
+            <select name="m_<%= m.id %>_position"><% posOpts.forEach(function (o) { %><option value="<%= o[0] %>" <%= (m.position || '') === o[0] ? 'selected' : '' %>><%= o[1] %></option><% }) %></select></label>
+          <label class="check"><input type="checkbox" name="m_<%= m.id %>_sub" <%= m.is_sub ? 'checked' : '' %>> Sub</label>
+          <label class="check"><input type="checkbox" name="m_<%= m.id %>_remove"> Remove</label>
+        </div>
+      </fieldset>
+    <% }) %>
     <datalist id="team-options"><% teams.forEach(function (t) { %><option value="<%= t.name %>"><% }) %></datalist>
+    <h3><%= (entry.memberships || []).length ? 'Add to another team' : 'Team' %></h3>
     <div class="grid-2">
-      <label>Team <input name="team" value="<%= entry.team || '' %>" maxlength="100" list="team-options" placeholder="Pick or type a new team"></label>
-      <label>League / division <small class="muted">(applies to the team)</small> <input name="division" value="<%= entry.division || '' %>" maxlength="100"></label>
-      <label>Jersey number <input name="jersey_number" value="<%= entry.jersey_number || '' %>" inputmode="numeric" maxlength="10"></label>
+      <label>Team <input name="team" value="<%= entry.team && !(entry.memberships || []).length ? entry.team : '' %>" maxlength="100" list="team-options" placeholder="Pick or type a new team"></label>
+      <label>League / division <small class="muted">(applies to the team)</small> <input name="division" maxlength="100"></label>
+      <label>Jersey number <input name="jersey_number" value="<%= !(entry.memberships || []).length && entry.jersey_number ? entry.jersey_number : '' %>" inputmode="numeric" maxlength="10"></label>
       <label>Position
-        <select name="position">
-          <option value="">—</option>
-          <option value="F" <%= entry.position === 'F' ? 'selected' : '' %>>Forward</option>
-          <option value="D" <%= entry.position === 'D' ? 'selected' : '' %>>Defense</option>
-          <option value="G" <%= entry.position === 'G' ? 'selected' : '' %>>Goaltender</option>
-        </select></label>
+        <select name="position"><% posOpts.forEach(function (o) { %><option value="<%= o[0] %>"><%= o[1] %></option><% }) %></select></label>
     </div>
+    <label class="check"><input type="checkbox" name="is_sub"> Sub on this team</label>
     <p class="small muted">Use the season selector at the top to edit this player's roster entry for another season.</p>
     <div class="actions">
       <button class="btn btn-primary" type="submit">Save</button>
       <% if (isNew) { %><button class="btn" type="submit" name="add_another" value="1">Save &amp; add another</button><% } %>
     </div>
   </form>
+  <% if (!isNew && similar.length) { %>
+    <hr>
+    <h2>Same person as…?</h2>
+    <p class="small muted">Merging moves the other record's registrations, rosters and ratings onto <strong><%= player.first_name %> <%= player.last_name %></strong>. If the same rater rated both in one season, the earlier rating is kept.</p>
+    <ul class="list">
+      <% similar.forEach(function (o) { %>
+        <li>
+          <a href="/players/<%= o.id %>"><%= o.first_name %> <%= o.last_name %></a>
+          <span class="small muted"><%= o.birth_date ? `born ${fmtDate(o.birth_date)}` : 'no date of birth' %></span>
+          <form method="post" action="/admin/players/merge" class="inline" data-confirm="Merge <%= o.first_name %> <%= o.last_name %> into this player? This can't be undone.">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <input type="hidden" name="keep_id" value="<%= player.id %>">
+            <input type="hidden" name="drop_id" value="<%= o.id %>">
+            <input type="hidden" name="return_to" value="player">
+            <button class="btn btn-small" type="submit">Merge into this player</button>
+          </form>
+        </li>
+      <% }) %>
+    </ul>
+  <% } %>
   <% if (!isNew) { %>
     <hr>
     <form method="post" action="/admin/players/<%= player.id %>/delete" data-confirm="Permanently delete this player AND all of their ratings in every season? Consider unchecking Active instead.">

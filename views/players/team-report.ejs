@@ -32,8 +32,8 @@
       <% players.forEach(function (p, i) { const s = summaries.get(p.id); %>
         <tr>
           <td><%= i + 1 %></td>
-          <td><%= p.jersey_number || '' %></td>
-          <td><a href="/players/<%= p.id %>"><%= p.first_name %> <%= p.last_name %></a><% if (s.needsReview) { %> <span class="tag tag-warn">3rd review</span><% } %></td>
+          <td><%= p.team_jersey || '' %></td>
+          <td><a href="/players/<%= p.id %>"><%= p.first_name %> <%= p.last_name %></a><% if (p.team_is_sub) { %> <span class="tag">Sub</span><% } %><% if (s.needsReview) { %> <span class="tag tag-warn">3rd review</span><% } %></td>
           <td class="num"><%= fmt(s.avgOverall) %></td>
           <td><%- include('../partials/level', { level: s.level }) %><%= s.overridden ? ' *' : '' %></td>
           <td class="num"><%= s.count %></td>
@@ -42,7 +42,7 @@
     </tbody>
   </table>
   </div>
-  <p class="small muted">* Final level set by an admin. Final rating is the average weighted score across all raters.</p>
+  <p class="small muted">* Final level set by an admin. Final rating is the average weighted score across all raters. A player on several teams (e.g. as a sub) has one rating per season, shown on each team.</p>
   <h3>Individual GURHA rating scale</h3>
   <div class="scale">
     <% levels.LEVELS.forEach(function (l, i) { %><div><span class="muted small"><%= i %></span> <%- include('../partials/level', { level: l }) %></div><% }) %>

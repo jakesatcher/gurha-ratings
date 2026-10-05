@@ -7,7 +7,7 @@
   <tbody>
   <% entries.forEach(function (e) { %>
     <tr>
-      <td class="nowrap"><%= new Date(e.created_at).toLocaleString('en-US') %></td>
+      <td class="nowrap"><%= new Date(e.created_at).toLocaleString('en-US', { timeZone: tz }) %></td>
       <td><%= e.actor_name || '—' %></td>
       <td><%= e.action.replace(/_/g, ' ') %></td>
       <td><% if (e.entity === 'player' && e.entity_id) { %><a href="/players/<%= e.entity_id %>">player <%= e.entity_id %></a><% } else if (e.entity === 'rating' && e.details && e.details.player_id) { %><a href="/players/<%= e.details.player_id %>#rating-<%= e.entity_id %>">rating <%= e.entity_id %></a><% } else { %><%= e.entity || '' %> <%= e.entity_id || '' %><% } %></td>

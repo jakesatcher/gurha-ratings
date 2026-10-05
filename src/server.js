@@ -5,6 +5,7 @@ const config = require('./config');
 const db = require('./db');
 const { migrate } = require('./db/migrate');
 const { createApp } = require('./app');
+const { backfillNameKeys } = require('./lib/identity');
 
 async function bootstrapAdmin() {
   const { email, password, name } = config.bootstrapAdmin;
@@ -30,6 +31,7 @@ async function bootstrapAdmin() {
 
 async function main() {
   await migrate();
+  await backfillNameKeys();
   await bootstrapAdmin();
   const app = createApp();
   app.listen(config.port, () => console.log(`${config.appName} listening on port ${config.port}`));

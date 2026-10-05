@@ -76,7 +76,7 @@ test('access request → admin approval → MFA → rating once → duplicate er
   assert.strictEqual(add.status, 302);
   const player = await h.db.one(`SELECT * FROM players WHERE last_name = 'Example'`);
   const season1 = await h.db.one('SELECT * FROM seasons WHERE is_current');
-  const entry = await h.db.one('SELECT sp.*, t.name AS team FROM season_players sp JOIN teams t ON t.id = sp.team_id WHERE sp.player_id = $1', [player.id]);
+  const entry = await h.db.one(`${h.SPOTS} WHERE p.id = $1`, [player.id]);
   assert.strictEqual(entry.season_id, season1.id);
   assert.strictEqual(entry.team, 'Blue Liners');
   assert.strictEqual(entry.jersey_number, '99');
@@ -183,8 +183,7 @@ test('CSV and JSON import create and update players', async () => {
   const json = JSON.stringify([{ first_name: 'Jane', last_name: 'Doe', team: 'Ice Dogs', jersey_number: '17' }]);
   const res2 = await agent.post('/admin/import').field('_csrf', csrf).field('season_id', seasonId).attach('file', Buffer.from(json), 'roster.json');
   assert.match(res2.text, /<strong>1<\/strong> updated/);
-  const jane = await h.db.one(
-    `SELECT sp.* FROM players p JOIN season_players sp ON sp.player_id = p.id WHERE p.last_name = 'Doe' AND sp.season_id = $1`, [seasonId]);
+  const jane = await h.db.one(`${h.SPOTS} WHERE p.last_name = 'Doe' AND sp.season_id = $1`, [seasonId]);
   assert.strictEqual(jane.jersey_number, '17');
   assert.strictEqual(jane.position, 'D');
 
@@ -238,8 +237,8 @@ test('seasons: re-rate each season, closed seasons, roster copy and history', as
   assert.ok(s2.is_current);
   assert.ok(!(await h.db.one('SELECT is_current FROM seasons WHERE id = $1', [s1.id])).is_current);
   const copied = await h.db.one(
-    'SELECT sp.jersey_number, t.name FROM season_players sp JOIN teams t ON t.id = sp.team_id WHERE sp.season_id = $1 AND sp.player_id = $2', [s2.id, sid.id]);
-  assert.deepStrictEqual({ ...copied }, { jersey_number: '87', name: 'Penguins' });
+    `${h.SPOTS} WHERE sp.season_id = $1 AND p.id = $2`, [s2.id, sid.id]);
+  assert.deepStrictEqual([copied.jersey_number, copied.name], ['87', 'Penguins']);
 
   // The rater (whose session still points at season 1) switches to season 2 and can rate again
   await h.post(rater, '/season', { season_id: String(s2.id), return_to: '/players' });
@@ -273,4 +272,82 @@ test('seasons: re-rate each season, closed seasons, roster copy and history', as
   // Seasons with ratings can't be deleted
   await h.post(admin, `/admin/seasons/${s2.id}/delete`, {}, '/admin/seasons');
   assert.ok(await h.db.one('SELECT id FROM seasons WHERE id = $1', [s2.id]));
+});
+
+test('duplicates: merge combines rosters and IDs, keeps one rating per rater per season', async () => {
+  await h.createUser({ email: 'm-admin@test.com', name: 'Merge Admin', role: 'admin' });
+  const r1 = await h.createUser({ email: 'm-r1@test.com', name: 'Rater One' });
+  const r2 = await h.createUser({ email: 'm-r2@test.com', name: 'Rater Two' });
+  const admin = await h.login(app, 'm-admin@test.com');
+  const season = await h.db.one('SELECT * FROM seasons WHERE is_current');
+  const { upsertPlayers } = require('../src/lib/players');
+  await h.db.tx((c) => upsertPlayers([
+    { first_name: 'Robert', last_name: 'Merge', team: 'Hawks', jersey_number: '4', birth_date: '1980-02-02', external_id: 'se:1001' },
+    { first_name: 'Bobby', last_name: 'Merge', team: 'Owls', jersey_number: '44', is_sub: 'yes', birth_date: '1980-02-02', external_id: 'se:2002' },
+    { first_name: 'Dana', last_name: 'Twin', birth_date: '1990-01-01', team: 'Hawks' },
+    { first_name: 'Dana', last_name: 'Twin', birth_date: '2001-01-01', team: 'Owls' }, // different person
+    { first_name: 'Dana', last_name: 'Twin' }, // which one? ambiguous → new record, flagged
+  ], 'import', season.id, c));
+  assert.strictEqual((await h.db.one(`SELECT count(*)::int AS n FROM players WHERE last_name = 'Twin'`)).n, 3);
+  const robert = await h.db.one(`SELECT ${h.byExt('se:1001')} AS id`);
+  const bobby = await h.db.one(`SELECT ${h.byExt('se:2002')} AS id`);
+  assert.notStrictEqual(robert.id, bobby.id, 'different first names are not auto-merged');
+
+  // Both records rated by Rater One; only Bobby by Rater Two
+  const R = require('../src/lib/ratings');
+  const cats = await R.getCategories();
+  const scores = (n) => cats.map((c) => ({ category_id: c.id, score: n, comment: null }));
+  const data = { independent_level: 'C2', game_performance: 'usually', final_level: 'C2', age_areas: [], injury_affects: [] };
+  await h.db.tx((c) => R.createRating(c, season.id, robert.id, r1.id, data, scores(5)));
+  await h.db.query(`UPDATE ratings SET created_at = now() - interval '1 day'`); // Robert's is older
+  await h.db.tx((c) => R.createRating(c, season.id, bobby.id, r1.id, data, scores(9)));
+  await h.db.tx((c) => R.createRating(c, season.id, bobby.id, r2.id, data, scores(7)));
+
+  // Duplicates page suggests the pair (same last name + DOB) and the Dana Twin pair (missing DOB)
+  const dups = await admin.get('/admin/duplicates');
+  assert.match(dups.text, /Same last name and date of birth/);
+  assert.match(dups.text, /Same name, a date of birth is missing/);
+
+  const merged = await h.post(admin, '/admin/players/merge', { keep_id: String(robert.id), drop_id: String(bobby.id) }, '/admin/duplicates');
+  assert.strictEqual(merged.status, 302);
+  assert.strictEqual(await h.db.one('SELECT id FROM players WHERE id = $1', [bobby.id]), null);
+  const ratings = await h.db.many('SELECT rater_id, (SELECT min(score) FROM rating_scores rs WHERE rs.rating_id = r.id) AS score FROM ratings r WHERE player_id = $1 ORDER BY rater_id', [robert.id]);
+  assert.deepStrictEqual(ratings.map((r) => [r.rater_id, r.score]), [[r1.id, 5], [r2.id, 7]], 'earlier rating kept for the clash, other rater moved over');
+  const spots = await h.db.many(`${h.SPOTS} WHERE p.id = $1 ORDER BY t.name`, [robert.id]);
+  assert.deepStrictEqual(spots.map((s) => `${s.team} #${s.jersey_number}${s.is_sub ? ' sub' : ''}`), ['Hawks #4', 'Owls #44 sub']);
+  assert.deepStrictEqual(spots[0].external_ids, ['se:1001', 'se:2002']);
+  const log = await h.db.one(`SELECT details FROM audit_log WHERE action = 'players_merged'`);
+  assert.strictEqual(log.details.ratingsDropped.length, 1);
+
+  // A later import with Bobby's registration ID lands on Robert
+  const again = await h.db.tx((c) => upsertPlayers([{ first_name: 'Bobby', last_name: 'Merge', external_id: 'se:2002', team: 'Owls' }], 'import', season.id, c));
+  assert.strictEqual(again.updated, 1);
+
+  // "Different people" hides a pair
+  const pairsWithTwin = async () => ((await admin.get('/admin/duplicates')).text.match(/class="card dup-pair"[\s\S]*?Dana Twin/g) || []).length;
+  assert.strictEqual(await pairsWithTwin(), 2);
+  const twins = await h.db.many(`SELECT id FROM players WHERE last_name = 'Twin' ORDER BY id`);
+  await h.post(admin, '/admin/duplicates/distinct', { a: String(twins[0].id), b: String(twins[2].id) }, '/admin/duplicates');
+  assert.strictEqual(await pairsWithTwin(), 1);
+});
+
+test('bulk merge of exact matches cleans up records created before identity matching', async () => {
+  await h.createUser({ email: 'b-admin@test.com', name: 'Bulk Admin', role: 'admin' });
+  const admin = await h.login(app, 'b-admin@test.com');
+  // Simulate the old import: two records for one person, one with "(Sub)" in the stored name.
+  const a = await h.db.one(`INSERT INTO players (first_name, last_name, birth_date, source) VALUES ('Raza', 'Hassan', '1960-10-12', 'sportsengine') RETURNING id`);
+  const b = await h.db.one(`INSERT INTO players (first_name, last_name, birth_date, source) VALUES ('Raza', 'Hassan (Sub)', '1960-10-12', 'sportsengine') RETURNING id`);
+  await h.db.query(`INSERT INTO player_external_ids (player_id, external_id) VALUES ($1, 'se:79249232'), ($2, 'se:79380718')`, [a.id, b.id]);
+  await require('../src/lib/identity').backfillNameKeys();
+
+  const page = await admin.get('/admin/duplicates');
+  assert.match(page.text, /Merge all exact matches/);
+  await h.post(admin, '/admin/duplicates/merge-exact', {}, '/admin/duplicates');
+  const left = await h.db.many(`SELECT p.id, p.last_name, array_agg(x.external_id ORDER BY x.external_id) AS ids
+                                   FROM players p JOIN player_external_ids x ON x.player_id = p.id
+                                  WHERE p.first_name = 'Raza' GROUP BY p.id`);
+  assert.strictEqual(left.length, 1);
+  assert.strictEqual(left[0].id, a.id, 'keeps the record without the (Sub) tag');
+  assert.strictEqual(left[0].last_name, 'Hassan');
+  assert.deepStrictEqual(left[0].ids, ['se:79249232', 'se:79380718']);
 });

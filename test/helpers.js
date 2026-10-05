@@ -20,6 +20,7 @@ const totp = require('../src/lib/totp');
 async function resetDb() {
   await db.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
   await migrate({ log: () => {} });
+  await require('../src/lib/identity').backfillNameKeys();
 }
 
 function csrfFrom(html) {
@@ -66,4 +67,13 @@ async function post(agent, url, data, getUrl = '/players') {
   return agent.post(url).type('form').send({ _csrf: csrfFrom(page.text), ...data });
 }
 
-module.exports = { db, request, createApp, resetDb, csrfFrom, lastCodeFor, createUser, login, post, mailer, totp };
+// Flattened view of every team spot: one row per (player, season, team).
+const SPOTS = `SELECT p.id AS player_id, p.birth_date, sp.season_id, t.name AS team, t.name, tr.jersey_number, tr.position, tr.is_sub,
+                      (SELECT array_agg(x.external_id ORDER BY x.id) FROM player_external_ids x WHERE x.player_id = p.id) AS external_ids
+                 FROM players p JOIN season_players sp ON sp.player_id = p.id
+                 JOIN team_rosters tr ON tr.season_player_id = sp.id LEFT JOIN teams t ON t.id = tr.team_id`;
+const byExt = (ext) => `(SELECT player_id FROM player_external_ids WHERE external_id = '${ext}')`;
+
+module.exports = {
+  SPOTS,
+  byExt, db, request, createApp, resetDb, csrfFrom, lastCodeFor, createUser, login, post, mailer, totp };

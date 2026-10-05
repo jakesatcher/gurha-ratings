@@ -75,22 +75,39 @@ Set `SPORTSENGINE_CLIENT_ID`, `SPORTSENGINE_CLIENT_SECRET` and `SPORTSENGINE_ORG
 
 The integration authenticates with OAuth client credentials. It reads the GraphQL schema (introspection) and builds every query from the fields your access actually exposes. Teams are filtered to a season by a season argument if `teams` has one, by a season field on the team, or through divisions. Rosters are fetched per team with `team(id)` when available. **Admin → SportsEngine → Diagnostics** runs a dry run that shows the generated query and the raw response. If introspection is disabled for your account, set `SPORTSENGINE_ROSTER_QUERY`.
 
+## Players, registrations and duplicates
+
+SportsEngine issues a new **SportNgin ID for every registration**, not every person. The same player can show up as "Hassan" #50 on one team and "Hassan (Sub)" #23 on another, with two different IDs. The app keeps three separate things:
+
+- **A player** is a person. They're rated **once per season** however many teams they're on.
+- **Registration IDs:** every SportNgin/SportsEngine ID seen for that person. A known ID always links straight back to them.
+- **Roster spots:** the teams a person is on in a season, each with its own jersey, position and sub flag. Team reports list everyone on the team (subs marked). The player list shows each person once.
+
+Imports match people in this order:
+
+1. A registration ID already linked to someone.
+2. **Same name + same date of birth.** Names are normalized first: "(Sub)", "[sub]" and "- Sub" are stripped and recorded as a sub spot; case, accents and punctuation are ignored.
+3. Same name when one side has no date of birth and only one person matches.
+
+**Different dates of birth always mean different people** (e.g. a father and son with the same name). Anything ambiguous comes in as a new player and is listed under **Admin → Duplicates**. That page also catches nicknames (same last name + date of birth, e.g. Tom / Thomas) and records without a date of birth. Admins merge a pair, or mark them as different people so the pair isn't suggested again. **Merge all exact matches** handles every same-name + same-date-of-birth pair in one click. Merging combines registration IDs, rosters and level overrides. If one rater rated both records in the same season, the earlier rating is kept, and every merge is recorded in the audit log.
+
 ## SportsEngine roster export (.xls)
 
 **Admin → Import → SportsEngine roster export** takes the workbook SportsEngine exports: one sheet per team. Each sheet has `League`, `Division`, `Season` and `Team` rows (the team row includes the SportsEngine team ID), then a header row: `SportNgin ID`, `Jersey #`, `First Name`, `Last Name`, `Position`, `Date of Birth`, `Gender`, `Height`, `Weight`, `Shoots`, `Grad Year`, `High School`, `ACT`, `SAT`, `GPA`.
 
 | Export column / row | Stored as |
 |---|---|
+| `League` row | Ignored: it's always Greer Upstate Recreational Hockey League (GURHA) |
 | `Team` row (name + ID) | Team in the chosen season, linked by SportsEngine team ID |
 | `Division` row (`C1B2 DIVISION`) | Team division (`C1B2`) |
 | `Season` row | Suggested season name (the last value, e.g. `FALL SEASON 2026`) |
-| `SportNgin ID` | Player's SportsEngine ID (used to match players across seasons) |
-| `Jersey #`, `Position` | The player's roster entry for the season (a blank value doesn't erase an existing one) |
-| `First Name`, `Last Name` | Player name |
-| `Date of Birth` | Player's date of birth. Raters only see the age calculated from it |
+| `SportNgin ID` | A registration ID on the player (see above) |
+| `Jersey #`, `Position` | The player's roster spot on that team (a blank value doesn't erase an existing one) |
+| `First Name`, `Last Name` | Player name. Tags like "(Sub)" are removed and mark the spot as a sub; "(Substitute goalie)" also sets the position to goalie |
+| `Date of Birth` | Player's date of birth, used for matching. Raters only see the age calculated from it |
 | Gender, Height, Weight, Shoots, school/test columns | Ignored |
 
-After upload you review the teams (grouped by division, with rows that need attention flagged). Then you pick which teams to import and the season to import into, either a new season or an existing one. Nothing is saved until you confirm, and the upload is discarded afterwards. Columns are found by name, so reordered or extra columns are fine. Only the Excel 97–2003 `.xls` format is supported.
+After upload, the review page shows every row's match (**Existing**, **New**, **Same person** as another row in the file, or **New · review**) and how many people the roster rows add up to. You then pick the teams and the season to import into. Nothing is saved until you confirm, and the upload is discarded afterwards. Only the Excel 97–2003 `.xls` format is supported.
 
 ## Import format
 

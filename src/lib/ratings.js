@@ -223,11 +223,13 @@ async function summariesForPlayers(players, seasonId) {
 // One summary per season the player was rostered or rated in, newest first.
 async function playerHistory(playerId) {
   const entries = await db.many(
-    `SELECT s.id AS season_id, s.name AS season_name, s.start_date, sp.jersey_number, sp.position, sp.level_override,
-            t.name AS team, t.division
+    `SELECT s.id AS season_id, s.name AS season_name, s.start_date, sp.level_override,
+            (SELECT string_agg(coalesce(t.name, 'No team') || CASE WHEN tr.is_sub THEN ' (sub)' ELSE '' END, ', ' ORDER BY tr.is_sub, t.name)
+               FROM team_rosters tr LEFT JOIN teams t ON t.id = tr.team_id WHERE tr.season_player_id = sp.id) AS teams,
+            (SELECT tr.jersey_number FROM team_rosters tr WHERE tr.season_player_id = sp.id AND tr.jersey_number IS NOT NULL
+              ORDER BY tr.is_sub, tr.id LIMIT 1) AS jersey_number
        FROM seasons s
        LEFT JOIN season_players sp ON sp.season_id = s.id AND sp.player_id = $1
-       LEFT JOIN teams t ON t.id = sp.team_id
       WHERE sp.id IS NOT NULL OR EXISTS (SELECT 1 FROM ratings r WHERE r.season_id = s.id AND r.player_id = $1)
       ORDER BY coalesce(s.start_date, s.created_at::date) DESC, s.id DESC`,
     [playerId]

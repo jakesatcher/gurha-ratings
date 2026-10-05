@@ -21,7 +21,7 @@
     <tr class="<%= p.active ? '' : 'inactive' %>">
       <td><a href="/players/<%= p.id %>"><%= p.last_name %>, <%= p.first_name %></a><%= p.active ? '' : ' (inactive)' %></td>
       <td><%= p.jersey_number || '' %></td>
-      <td><%= p.season_player_id ? (p.team || 'No team') : '— not on roster —' %></td>
+      <td><%= p.season_player_id ? (p.memberships || []).map(function (m) { return (m.team || 'No team') + (m.jersey_number ? ` #${m.jersey_number}` : '') + (m.is_sub ? ' (sub)' : ''); }).join(', ') || 'No team' : '— not on roster —' %></td>
       <td><%= p.position || '' %></td>
       <% if (view === 'all') { %><td class="num"><%= p.season_count %></td><% } %>
       <td class="num"><%= s.count %></td>

@@ -12,12 +12,13 @@ const router = express.Router();
 router.get('/account', requireAuth, async (req, res) => {
   const myRatings = await db.many(
     `SELECT r.id, r.created_at, r.final_level, s.name AS season_name, p.id AS player_id, p.first_name, p.last_name,
-            t.name AS team, sp.jersey_number
+            (SELECT string_agg(t.name, ', ' ORDER BY tr.is_sub, t.name) FROM season_players sp
+               JOIN team_rosters tr ON tr.season_player_id = sp.id JOIN teams t ON t.id = tr.team_id
+              WHERE sp.season_id = r.season_id AND sp.player_id = r.player_id) AS team,
+            NULL AS jersey_number
        FROM ratings r
        JOIN players p ON p.id = r.player_id
        JOIN seasons s ON s.id = r.season_id
-       LEFT JOIN season_players sp ON sp.season_id = r.season_id AND sp.player_id = r.player_id
-       LEFT JOIN teams t ON t.id = sp.team_id
       WHERE r.rater_id = $1 ORDER BY r.created_at DESC`,
     [req.user.id]
   );

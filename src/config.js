@@ -19,6 +19,7 @@ module.exports = {
   isProd,
   port: Number(env.PORT) || 3000,
   appName: env.APP_NAME || 'GURHA Ratings',
+  timeZone: env.TIME_ZONE || 'America/New_York',
   appUrl: (env.APP_URL || `http://localhost:${Number(env.PORT) || 3000}`).replace(/\/$/, ''),
   databaseUrl: env.DATABASE_URL || 'postgres://localhost/gurha',
   databaseSsl: bool(env.DATABASE_SSL, false),

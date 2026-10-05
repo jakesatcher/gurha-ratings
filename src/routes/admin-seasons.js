@@ -46,7 +46,7 @@ async function nameTaken(name, exceptId = 0) {
   return Boolean(await db.one('SELECT 1 FROM seasons WHERE lower(name) = lower($1) AND id <> $2', [name, exceptId]));
 }
 
-// Copies teams and roster entries (not ratings or level overrides) from one season into another.
+// Copies teams, people and their team spots (not ratings or level overrides) into another season.
 async function copyRoster(client, fromId, toId) {
   await client.query(
     `INSERT INTO teams (season_id, name, division, external_id)
@@ -55,13 +55,21 @@ async function copyRoster(client, fromId, toId) {
     [fromId, toId]
   );
   const { rowCount } = await client.query(
-    `INSERT INTO season_players (season_id, player_id, team_id, jersey_number, position, source)
-     SELECT $2, sp.player_id, nt.id, sp.jersey_number, sp.position, 'copy'
-       FROM season_players sp
-       LEFT JOIN teams ot ON ot.id = sp.team_id
-       LEFT JOIN teams nt ON nt.season_id = $2 AND lower(nt.name) = lower(ot.name)
-      WHERE sp.season_id = $1
+    `INSERT INTO season_players (season_id, player_id, source)
+     SELECT $2, sp.player_id, 'copy' FROM season_players sp WHERE sp.season_id = $1
      ON CONFLICT (season_id, player_id) DO NOTHING`,
+    [fromId, toId]
+  );
+  await client.query(
+    `INSERT INTO team_rosters (season_player_id, team_id, jersey_number, position, is_sub, source)
+     SELECT nsp.id, nt.id, tr.jersey_number, tr.position, tr.is_sub, 'copy'
+       FROM season_players osp
+       JOIN team_rosters tr ON tr.season_player_id = osp.id
+       JOIN season_players nsp ON nsp.season_id = $2 AND nsp.player_id = osp.player_id
+       LEFT JOIN teams ot ON ot.id = tr.team_id
+       LEFT JOIN teams nt ON nt.season_id = $2 AND lower(nt.name) = lower(ot.name)
+      WHERE osp.season_id = $1
+     ON CONFLICT DO NOTHING`,
     [fromId, toId]
   );
   return rowCount;
@@ -111,7 +119,13 @@ router.get('/seasons/:id', async (req, res) => {
   const season = await db.one('SELECT * FROM seasons WHERE id = $1', [id(req)]);
   if (!season) return res.redirect('/admin/seasons');
   const teams = await roster.seasonTeams(season.id);
-  const unassigned = (await db.one('SELECT count(*)::int AS n FROM season_players WHERE season_id = $1 AND team_id IS NULL', [season.id])).n;
+  const unassigned = (
+    await db.one(
+      `SELECT count(*)::int AS n FROM season_players sp
+        WHERE sp.season_id = $1 AND NOT EXISTS (SELECT 1 FROM team_rosters tr WHERE tr.season_player_id = sp.id AND tr.team_id IS NOT NULL)`,
+      [season.id]
+    )
+  ).n;
   const ratingCount = (await db.one('SELECT count(*)::int AS n FROM ratings WHERE season_id = $1', [season.id])).n;
   res.render('admin/season', { title: season.name, editSeason: season, teams, unassigned, ratingCount });
 });
@@ -180,7 +194,7 @@ router.post('/teams/:id/delete', async (req, res) => {
   if (!team) return res.redirect('/admin/seasons');
   await db.query('DELETE FROM teams WHERE id = $1', [team.id]);
   await audit(req.user.id, 'team_deleted', 'team', team.id, { name: team.name, season_id: team.season_id });
-  req.flash('success', `Team "${team.name}" deleted. Its players stay on the season roster without a team.`);
+  req.flash('success', `Team "${team.name}" deleted. Its players stay on the season roster.`);
   res.redirect(`/admin/seasons/${team.season_id}`);
 });
 

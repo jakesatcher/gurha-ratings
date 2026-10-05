@@ -161,11 +161,7 @@ router.get('/reports/teams', requireAuth, async (req, res) => {
   let players = [];
   let summaries = new Map();
   if (team) {
-    players = await db.many(
-      `${roster.ROSTER_SELECT} WHERE sp.team_id = $1 AND p.active
-        ORDER BY NULLIF(regexp_replace(coalesce(sp.jersey_number, ''), '\\D', '', 'g'), '')::int NULLS LAST, lower(p.last_name)`,
-      [team.id]
-    );
+    players = await roster.teamRoster(team.id);
     summaries = await R.summariesForPlayers(players, req.season.id);
   }
   res.render('players/team-report', { title: team ? `${team.name} summary` : 'Team summary', teams, team, players, summaries });
