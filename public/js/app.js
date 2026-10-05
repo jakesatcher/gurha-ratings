@@ -134,3 +134,41 @@
     }
   });
 })();
+
+// Show/hide toggle on every password field.
+(function () {
+  'use strict';
+  var fields = document.querySelectorAll('input[type="password"]');
+  fields.forEach(function (input, i) {
+    if (!input.id) input.id = 'pw-field-' + i;
+    var wrap = document.createElement('span');
+    wrap.className = 'pw-wrap';
+    input.parentNode.insertBefore(wrap, input);
+    wrap.appendChild(input);
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'pw-toggle';
+    btn.textContent = 'Show';
+    btn.setAttribute('aria-controls', input.id);
+    btn.setAttribute('aria-pressed', 'false');
+    btn.setAttribute('aria-label', 'Show password');
+    wrap.appendChild(btn);
+    btn.addEventListener('click', function () {
+      var show = input.type === 'password';
+      input.type = show ? 'text' : 'password';
+      btn.textContent = show ? 'Hide' : 'Show';
+      btn.setAttribute('aria-pressed', String(show));
+      btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+      input.focus();
+    });
+  });
+  // Put fields back to hidden before submitting, so browsers treat them as passwords (saving,
+  // not remembering them as form history).
+  document.querySelectorAll('form').forEach(function (form) {
+    form.addEventListener('submit', function (e) {
+      if (e.defaultPrevented) return; // blocked by validation: leave fields as the user had them
+      form.querySelectorAll('.pw-wrap input').forEach(function (input) { input.type = 'password'; });
+      form.querySelectorAll('.pw-toggle').forEach(function (b) { b.textContent = 'Show'; b.setAttribute('aria-pressed', 'false'); b.setAttribute('aria-label', 'Show password'); });
+    });
+  });
+})();

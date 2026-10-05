@@ -526,3 +526,13 @@ h2 { text-transform: uppercase; font-weight: 600; }
 .role-option { display: flex; gap: .65rem; align-items: flex-start; font-weight: 500; padding: .65rem .8rem; margin-bottom: .45rem; border: 2px solid var(--border); border-radius: 10px; background: var(--surface-2); cursor: pointer; }
 .role-option input { margin-top: .25rem; }
 .role-option:has(input:checked) { border-color: var(--brand-2); background: var(--info-bg); }
+/* Show/hide password toggle */
+.pw-wrap { position: relative; display: block; margin-top: .3rem; }
+.pw-wrap input { margin-top: 0; padding-right: 4.5rem; }
+.pw-toggle {
+  position: absolute; right: .35rem; top: 50%; transform: translateY(-50%);
+  min-height: 34px; padding: .2rem .6rem; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--surface); color: var(--brand-2); font: inherit; font-size: .85rem; font-weight: 700; cursor: pointer;
+}
+.pw-toggle:hover { border-color: var(--brand-2); }
+.pw-toggle:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 1px; }
