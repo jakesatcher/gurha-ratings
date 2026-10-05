@@ -6,6 +6,7 @@ const db = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const { audit } = require('../lib/audit');
 const R = require('../lib/ratings');
+const roster = require('../lib/roster');
 
 const router = express.Router();
 
@@ -13,41 +14,25 @@ function canSeeRaterNames(user) {
   return user.role === 'admin' || config.showRaterNamesToRaters;
 }
 
-async function teamsList() {
-  return (await db.many(`SELECT DISTINCT team FROM players WHERE team IS NOT NULL AND team <> '' AND active ORDER BY team`)).map((r) => r.team);
+function noSeason(req, res) {
+  return res.status(404).render('error', {
+    title: 'No seasons yet',
+    message: req.user.role === 'admin' ? 'Create a season under Admin → Seasons to get started.' : 'No season has been set up yet. Check back soon.',
+  });
 }
 
-// Shared player search used by the players page and the admin player list.
-async function searchPlayers({ q, team, position, includeInactive }) {
-  const where = [];
-  const params = [];
-  if (!includeInactive) where.push('active');
-  if (q) {
-    params.push(`%${q.toLowerCase()}%`);
-    const i = params.length;
-    where.push(`(lower(first_name || ' ' || last_name) LIKE $${i} OR lower(last_name || ', ' || first_name) LIKE $${i}
-                 OR lower(coalesce(team, '')) LIKE $${i} OR lower(coalesce(division, '')) LIKE $${i})`);
-    if (/^#?\d{1,3}$/.test(q)) {
-      params.push(q.replace('#', ''));
-      where[where.length - 1] = `(${where[where.length - 1]} OR jersey_number = $${params.length})`;
-    }
-  }
-  if (team) {
-    params.push(team);
-    where.push(`team = $${params.length}`);
-  }
-  if (['F', 'D', 'G'].includes(position)) {
-    params.push(position);
-    where.push(`position = $${params.length}`);
-  }
-  return db.many(
-    `SELECT * FROM players ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
-      ORDER BY lower(last_name), lower(first_name) LIMIT 1000`,
-    params
-  );
-}
+// Switch the season being viewed.
+router.post('/season', requireAuth, async (req, res) => {
+  const season = await db.one('SELECT id FROM seasons WHERE id = $1', [Number(req.body.season_id) || 0]);
+  if (season) req.session.seasonId = season.id;
+  const back = String(req.body.return_to || '');
+  // Player pages stay put; anything season-specific (forms, filters) goes back to its list.
+  const safe = back.startsWith('/') && !back.startsWith('//') ? back.replace(/\/(rate|edit)$/, '').split('?')[0] : '/players';
+  res.redirect(safe.startsWith('/admin/ratings') ? '/players' : safe);
+});
 
 router.get('/players', requireAuth, async (req, res) => {
+  if (!req.season) return noSeason(req, res);
   const filters = {
     q: String(req.query.q || '').trim().slice(0, 100),
     team: String(req.query.team || ''),
@@ -55,10 +40,10 @@ router.get('/players', requireAuth, async (req, res) => {
     status: String(req.query.status || ''),
     sort: String(req.query.sort || 'name'),
   };
-  let players = await searchPlayers(filters);
-  const summaries = await R.summariesForPlayers(players);
+  let players = await roster.searchRoster(req.season.id, { ...filters, teamId: filters.team });
+  const summaries = await R.summariesForPlayers(players, req.season.id);
   const mine = new Set(
-    (await db.many('SELECT player_id FROM ratings WHERE rater_id = $1', [req.user.id])).map((r) => r.player_id)
+    (await db.many('SELECT player_id FROM ratings WHERE rater_id = $1 AND season_id = $2', [req.user.id, req.season.id])).map((r) => r.player_id)
   );
   if (filters.status === 'unrated') players = players.filter((p) => !mine.has(p.id));
   if (filters.status === 'rated') players = players.filter((p) => mine.has(p.id));
@@ -67,48 +52,70 @@ router.get('/players', requireAuth, async (req, res) => {
   if (filters.sort === 'rating') {
     players.sort((a, b) => (summaries.get(b.id).avgOverall ?? -1) - (summaries.get(a.id).avgOverall ?? -1));
   }
-  res.render('players/index', { title: 'Players', players, summaries, mine, filters, teams: await teamsList() });
+  res.render('players/index', { title: 'Players', players, summaries, mine, filters, teams: await roster.seasonTeams(req.season.id) });
 });
 
-async function loadPlayerPage(req, playerId) {
-  const player = await db.one('SELECT * FROM players WHERE id = $1', [playerId]);
-  if (!player) return null;
-  const { ratings, categories } = await R.loadRatings({ playerIds: [player.id] });
+router.get('/players/:id', requireAuth, async (req, res) => {
+  const playerId = Number(req.params.id) || 0;
+  const base = await db.one('SELECT * FROM players WHERE id = $1', [playerId]);
+  if (!base || (!base.active && req.user.role !== 'admin')) {
+    return res.status(404).render('error', { title: 'Not found', message: 'Player not found.' });
+  }
+  const entry = req.season ? await roster.seasonPlayer(req.season.id, playerId) : null;
+  const player = entry || base;
+  const { ratings, categories } = req.season
+    ? await R.loadRatings({ playerIds: [playerId], seasonId: req.season.id })
+    : { ratings: [], categories: await R.getCategories() };
   const summary = R.summarize(ratings, categories, player);
   const myRating = ratings.find((r) => r.rater_id === req.user.id) || null;
   const showNames = canSeeRaterNames(req.user);
   ratings.forEach((r, i) => {
     r.display_name = showNames || r.rater_id === req.user.id ? r.rater_name : `Rater ${i + 1}`;
   });
-  return { player, ratings, categories, summary, myRating };
-}
-
-router.get('/players/:id', requireAuth, async (req, res) => {
-  const data = await loadPlayerPage(req, Number(req.params.id) || 0);
-  if (!data || (!data.player.active && req.user.role !== 'admin')) {
-    return res.status(404).render('error', { title: 'Not found', message: 'Player not found.' });
-  }
-  res.render('players/show', { title: `${data.player.first_name} ${data.player.last_name}`, ...data });
+  const history = await R.playerHistory(playerId);
+  res.render('players/show', {
+    title: `${player.first_name} ${player.last_name}`,
+    player,
+    onRoster: Boolean(entry),
+    ratings,
+    categories,
+    summary,
+    myRating,
+    history,
+    canRate: Boolean(entry && base.active && req.season.ratings_open),
+  });
 });
 
 function renderAlreadyRated(res, player) {
   return res.status(409).render('ratings/already-rated', { title: 'Already rated', player, message: R.ALREADY_RATED_MESSAGE });
 }
 
+// Returns the season roster row if this player can be rated in the selected season, else renders why not.
 async function ratablePlayer(req, res) {
-  const player = await db.one('SELECT * FROM players WHERE id = $1', [Number(req.params.id) || 0]);
+  if (!req.season) {
+    noSeason(req, res);
+    return null;
+  }
+  const player = await roster.seasonPlayer(req.season.id, Number(req.params.id) || 0);
   if (!player || !player.active) {
-    res.status(404).render('error', { title: 'Not found', message: 'Player not found.' });
+    res.status(404).render('error', { title: 'Not found', message: `That player isn't on the ${req.season.name} roster.` });
+    return null;
+  }
+  if (!req.season.ratings_open) {
+    res.status(403).render('error', { title: 'Ratings closed', message: `Ratings for ${req.season.name} are closed.` });
     return null;
   }
   return player;
 }
 
+async function existingRating(req, player) {
+  return db.one('SELECT id FROM ratings WHERE season_id = $1 AND player_id = $2 AND rater_id = $3', [req.season.id, player.id, req.user.id]);
+}
+
 router.get('/players/:id/rate', requireAuth, async (req, res) => {
   const player = await ratablePlayer(req, res);
   if (!player) return;
-  const existing = await db.one('SELECT id FROM ratings WHERE player_id = $1 AND rater_id = $2', [player.id, req.user.id]);
-  if (existing) return renderAlreadyRated(res, player);
+  if (await existingRating(req, player)) return renderAlreadyRated(res, player);
   const categories = await R.getCategories();
   res.render('ratings/form', { title: `Rate ${player.first_name} ${player.last_name}`, player, categories, values: {}, errors: [], mode: 'create', R });
 });
@@ -116,8 +123,12 @@ router.get('/players/:id/rate', requireAuth, async (req, res) => {
 router.post('/players/:id/rate', requireAuth, async (req, res) => {
   const player = await ratablePlayer(req, res);
   if (!player) return;
-  const existing = await db.one('SELECT id FROM ratings WHERE player_id = $1 AND rater_id = $2', [player.id, req.user.id]);
-  if (existing) return renderAlreadyRated(res, player);
+  // Guard against the season being switched in another tab while the form was open.
+  if (req.body.season_id && Number(req.body.season_id) !== req.season.id) {
+    req.flash('error', 'You switched seasons while rating. Please check the season and submit again.');
+    return res.redirect(`/players/${player.id}`);
+  }
+  if (await existingRating(req, player)) return renderAlreadyRated(res, player);
 
   const categories = await R.getCategories();
   const { errors, data, scores } = R.parseRatingForm(req.body, categories);
@@ -128,14 +139,14 @@ router.post('/players/:id/rate', requireAuth, async (req, res) => {
   }
   try {
     const ratingId = await db.tx(async (c) => {
-      const id = await R.createRating(c, player.id, req.user.id, data, scores);
-      await audit(req.user.id, 'rating_created', 'rating', id, { player_id: player.id }, c);
+      const id = await R.createRating(c, req.season.id, player.id, req.user.id, data, scores);
+      await audit(req.user.id, 'rating_created', 'rating', id, { player_id: player.id, season_id: req.season.id }, c);
       return id;
     });
     req.flash('success', `Rating submitted for ${player.first_name} ${player.last_name}. Thank you!`);
     res.redirect(`/players/${player.id}#rating-${ratingId}`);
   } catch (err) {
-    // Unique (player_id, rater_id) violation: a concurrent duplicate submission.
+    // Unique (season, player, rater) violation: a concurrent duplicate submission.
     if (err.code === '23505') return renderAlreadyRated(res, player);
     throw err;
   }
@@ -144,21 +155,20 @@ router.post('/players/:id/rate', requireAuth, async (req, res) => {
 // ---------- Team summary report (mirrors the GURHA Team Player Rating & Division Summary) ----------
 
 router.get('/reports/teams', requireAuth, async (req, res) => {
-  const teams = await teamsList();
-  const team = String(req.query.team || '');
+  if (!req.season) return noSeason(req, res);
+  const teams = await roster.seasonTeams(req.season.id);
+  const team = teams.find((t) => String(t.id) === String(req.query.team)) || null;
   let players = [];
   let summaries = new Map();
   if (team) {
     players = await db.many(
-      `SELECT * FROM players WHERE active AND team = $1
-        ORDER BY NULLIF(regexp_replace(coalesce(jersey_number, ''), '\\D', '', 'g'), '')::int NULLS LAST, lower(last_name)`,
-      [team]
+      `${roster.ROSTER_SELECT} WHERE sp.team_id = $1 AND p.active
+        ORDER BY NULLIF(regexp_replace(coalesce(sp.jersey_number, ''), '\\D', '', 'g'), '')::int NULLS LAST, lower(p.last_name)`,
+      [team.id]
     );
-    summaries = await R.summariesForPlayers(players);
+    summaries = await R.summariesForPlayers(players, req.season.id);
   }
-  const division = players.find((p) => p.division)?.division || '';
-  res.render('players/team-report', { title: team ? `${team} summary` : 'Team summary', teams, team, players, summaries, division });
+  res.render('players/team-report', { title: team ? `${team.name} summary` : 'Team summary', teams, team, players, summaries });
 });
 
 module.exports = router;
-module.exports.searchPlayers = searchPlayers;

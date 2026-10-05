@@ -1,6 +1,7 @@
 <%- include('../partials/head') %>
 <h1>Import players</h1>
 <%- include('_nav') %>
+<div class="alert alert-info">Importing into <strong><%= season.name %></strong>. Change the season with the selector at the top, or <a href="/admin/seasons">create a new season</a>.</div>
 
 <% if (result) { %>
   <div class="alert alert-success" role="status">
@@ -15,6 +16,7 @@
     <h2>Upload CSV or JSON</h2>
     <form method="post" action="/admin/import" enctype="multipart/form-data" class="stack">
       <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <input type="hidden" name="season_id" value="<%= season.id %>">
       <label>File <input type="file" name="file" accept=".csv,.json,text/csv,application/json"></label>
       <label>…or paste CSV / JSON <textarea name="pasted" rows="5" placeholder="first_name,last_name,jersey_number,team&#10;Wayne,Example,99,Blue Liners"></textarea></label>
       <button class="btn btn-primary" type="submit">Import</button>
@@ -24,20 +26,17 @@
       <summary>Accepted columns</summary>
       <p><code>first_name</code>, <code>last_name</code> (or a single <code>name</code> column), <code>jersey_number</code>, <code>team</code>, <code>division</code>, <code>position</code> (F/D/G or Forward/Defense/Goalie), <code>age</code>, <code>email</code>, <code>external_id</code>, <code>notes</code>.</p>
       <p>JSON may be an array of player objects, or <code>{ "players": [ … ] }</code>.</p>
-      <p>Existing players are matched by <code>external_id</code>, then by first + last name + team, and updated instead of duplicated.</p>
+      <p>Existing players are matched by <code>external_id</code>, then name + team in this season, then email, then a unique first + last name. They're updated and added to this season's roster instead of being duplicated. Teams are created in this season as needed.</p>
     </details>
   </section>
   <section class="card">
     <h2>SportsEngine</h2>
     <% if (seConfigured) { %>
-      <p>Pull the current rosters from SportsEngine. Existing players are updated; nobody is deleted.</p>
-      <form method="post" action="/admin/sportsengine/sync" data-confirm="Sync rosters from SportsEngine now?">
-        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-        <button class="btn btn-primary" type="submit">Sync from SportsEngine</button>
-      </form>
-      <p class="small"><a href="/admin/sportsengine">Diagnostics (dry run)</a></p>
+      <p>Pick a SportsEngine season and choose which teams to import.</p>
+      <p><a class="btn btn-primary" href="/admin/sportsengine">Browse SportsEngine</a></p>
+      <p class="small"><a href="/admin/sportsengine/diagnostics">Diagnostics (dry run)</a></p>
     <% } else { %>
-      <p class="muted">Not configured. Set <code>SPORTSENGINE_CLIENT_ID</code>, <code>SPORTSENGINE_CLIENT_SECRET</code> and <code>SPORTSENGINE_ORG_ID</code> in Railway to enable roster sync.</p>
+      <p class="muted">Not configured. Set <code>SPORTSENGINE_CLIENT_ID</code>, <code>SPORTSENGINE_CLIENT_SECRET</code> and <code>SPORTSENGINE_ORG_ID</code> in Railway to enable roster import.</p>
     <% } %>
   </section>
 </div>

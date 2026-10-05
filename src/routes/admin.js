@@ -13,26 +13,40 @@ const { audit } = require('../lib/audit');
 const { parseUpload, upsertPlayers, normalizePosition } = require('../lib/players');
 const { isLevel } = require('../lib/levels');
 const R = require('../lib/ratings');
-const { searchPlayers } = require('./players');
+const roster = require('../lib/roster');
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024, files: 1 } });
 
 router.use(requireAdmin);
+router.use(require('./admin-seasons'));
 
 const id = (req) => Number(req.params.id) || 0;
+
+// Most admin pages work on the season selected in the season bar.
+function needSeason(req, res) {
+  if (req.season) return true;
+  req.flash('error', 'Create a season first.');
+  res.redirect('/admin/seasons');
+  return false;
+}
 
 // ---------- Dashboard ----------
 
 router.get('/', async (req, res) => {
-  const stats = await db.one(`SELECT
+  const seasonId = req.season ? req.season.id : 0;
+  const stats = await db.one(
+    `SELECT
       (SELECT count(*) FROM users WHERE status = 'pending')::int AS pending,
       (SELECT count(*) FROM users WHERE status = 'approved')::int AS users,
-      (SELECT count(*) FROM players WHERE active)::int AS players,
-      (SELECT count(*) FROM ratings)::int AS ratings,
-      (SELECT count(*) FROM players p WHERE active AND NOT EXISTS (SELECT 1 FROM ratings r WHERE r.player_id = p.id))::int AS unrated`);
-  const players = await db.many('SELECT * FROM players WHERE active');
-  const summaries = await R.summariesForPlayers(players);
+      (SELECT count(*) FROM season_players sp JOIN players p ON p.id = sp.player_id WHERE sp.season_id = $1 AND p.active)::int AS players,
+      (SELECT count(*) FROM ratings WHERE season_id = $1)::int AS ratings,
+      (SELECT count(*) FROM season_players sp JOIN players p ON p.id = sp.player_id
+        WHERE sp.season_id = $1 AND p.active AND NOT EXISTS (SELECT 1 FROM ratings r WHERE r.player_id = p.id AND r.season_id = $1))::int AS unrated`,
+    [seasonId]
+  );
+  const players = req.season ? await roster.searchRoster(seasonId) : [];
+  const summaries = await R.summariesForPlayers(players, seasonId);
   const flagged = players.filter((p) => summaries.get(p.id).needsReview);
   const weights = await db.one('SELECT coalesce(sum(weight), 0)::float AS total FROM categories WHERE active');
   res.render('admin/dashboard', {
@@ -134,10 +148,33 @@ router.post('/users/:id/:action', async (req, res) => {
 // ---------- Players ----------
 
 router.get('/players', async (req, res) => {
-  const q = String(req.query.q || '').trim();
-  const players = await searchPlayers({ q, includeInactive: true });
-  const summaries = await R.summariesForPlayers(players);
-  res.render('admin/players', { title: 'Manage players', players, summaries, q });
+  if (!needSeason(req, res)) return;
+  const q = String(req.query.q || '').trim().slice(0, 100);
+  const view = req.query.view === 'all' ? 'all' : 'season';
+  let players;
+  if (view === 'all') {
+    // Every player, with their roster entry for the selected season if they have one.
+    const params = [req.season.id];
+    let where = '';
+    if (q) {
+      params.push(`%${q.toLowerCase()}%`);
+      where = `WHERE lower(p.first_name || ' ' || p.last_name) LIKE $2 OR lower(p.last_name || ', ' || p.first_name) LIKE $2`;
+    }
+    players = await db.many(
+      `SELECT p.*, sp.id AS season_player_id, sp.jersey_number, sp.position, sp.level_override, t.name AS team, t.division,
+              (SELECT count(DISTINCT season_id) FROM season_players x WHERE x.player_id = p.id)::int AS season_count
+         FROM players p
+         LEFT JOIN season_players sp ON sp.player_id = p.id AND sp.season_id = $1
+         LEFT JOIN teams t ON t.id = sp.team_id
+         ${where}
+        ORDER BY lower(p.last_name), lower(p.first_name) LIMIT 2000`,
+      params
+    );
+  } else {
+    players = await roster.searchRoster(req.season.id, { q, includeInactive: true });
+  }
+  const summaries = await R.summariesForPlayers(players, req.season.id);
+  res.render('admin/players', { title: 'Manage players', players, summaries, q, view });
 });
 
 function playerFromBody(body) {
@@ -145,10 +182,6 @@ function playerFromBody(body) {
   return {
     first_name: String(body.first_name || '').trim().slice(0, 100),
     last_name: String(body.last_name || '').trim().slice(0, 100),
-    jersey_number: String(body.jersey_number || '').trim().replace(/^#/, '').slice(0, 10) || null,
-    team: String(body.team || '').trim().slice(0, 100) || null,
-    division: String(body.division || '').trim().slice(0, 100) || null,
-    position: normalizePosition(body.position),
     age: Number.isInteger(age) && age > 0 && age < 120 ? age : null,
     email: String(body.email || '').trim().slice(0, 200) || null,
     notes: String(body.notes || '').trim().slice(0, 2000) || null,
@@ -156,44 +189,93 @@ function playerFromBody(body) {
   };
 }
 
-const PLAYER_COLS = ['first_name', 'last_name', 'jersey_number', 'team', 'division', 'position', 'age', 'email', 'notes', 'active'];
+function entryFromBody(body) {
+  return {
+    on_roster: body.on_roster === undefined || body.on_roster === 'on',
+    team: String(body.team || '').trim().slice(0, 100) || null,
+    division: String(body.division || '').trim().slice(0, 100) || null,
+    jersey_number: String(body.jersey_number || '').trim().replace(/^#/, '').slice(0, 10) || null,
+    position: normalizePosition(body.position),
+  };
+}
 
-router.get('/players/new', (req, res) => {
-  res.render('admin/player-form', { title: 'Add player', player: { active: true }, errors: [] });
+const PLAYER_COLS = ['first_name', 'last_name', 'age', 'email', 'notes', 'active'];
+
+// Writes a player's roster entry for the season exactly as entered (blank clears a value).
+async function saveEntry(client, seasonId, playerId, e) {
+  if (!e.on_roster) {
+    await client.query('DELETE FROM season_players WHERE season_id = $1 AND player_id = $2', [seasonId, playerId]);
+    return;
+  }
+  const team = await roster.findOrCreateTeam(client, seasonId, { name: e.team, division: e.division });
+  await client.query(
+    `INSERT INTO season_players (season_id, player_id, team_id, jersey_number, position)
+     VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (season_id, player_id) DO UPDATE SET team_id = $3, jersey_number = $4, position = $5, updated_at = now()`,
+    [seasonId, playerId, team ? team.id : null, e.jersey_number, e.position]
+  );
+}
+
+async function renderPlayerForm(req, res, { player, entry, errors = [], status = 200 }) {
+  res.status(status).render('admin/player-form', {
+    title: player.id ? 'Edit player' : 'Add player',
+    player,
+    entry,
+    errors,
+    teams: await roster.seasonTeams(req.season.id),
+  });
+}
+
+router.get('/players/new', async (req, res) => {
+  if (!needSeason(req, res)) return;
+  await renderPlayerForm(req, res, { player: { active: true }, entry: { on_roster: true } });
 });
 
 router.post('/players', async (req, res) => {
+  if (!needSeason(req, res)) return;
   const p = playerFromBody(req.body);
+  const e = entryFromBody({ ...req.body, on_roster: 'on' });
   if (!p.first_name || !p.last_name) {
-    return res.status(422).render('admin/player-form', { title: 'Add player', player: p, errors: ['First and last name are required.'] });
+    return renderPlayerForm(req, res, { player: p, entry: e, errors: ['First and last name are required.'], status: 422 });
   }
-  const row = await db.one(
-    `INSERT INTO players (${PLAYER_COLS.join(', ')}, source) VALUES (${PLAYER_COLS.map((_, i) => `$${i + 1}`).join(', ')}, 'manual') RETURNING id`,
-    PLAYER_COLS.map((c) => p[c])
-  );
-  await audit(req.user.id, 'player_created', 'player', row.id, { name: `${p.first_name} ${p.last_name}` });
-  req.flash('success', `${p.first_name} ${p.last_name} added.`);
+  const row = await db.tx(async (c) => {
+    const { rows } = await c.query(
+      `INSERT INTO players (${PLAYER_COLS.join(', ')}, source) VALUES (${PLAYER_COLS.map((_, i) => `$${i + 1}`).join(', ')}, 'manual') RETURNING id`,
+      PLAYER_COLS.map((col) => p[col])
+    );
+    await saveEntry(c, req.season.id, rows[0].id, e);
+    await audit(req.user.id, 'player_created', 'player', rows[0].id, { name: `${p.first_name} ${p.last_name}`, season_id: req.season.id }, c);
+    return rows[0];
+  });
+  req.flash('success', `${p.first_name} ${p.last_name} added to ${req.season.name}.`);
   res.redirect(req.body.add_another ? '/admin/players/new' : `/players/${row.id}`);
 });
 
 router.get('/players/:id/edit', async (req, res) => {
+  if (!needSeason(req, res)) return;
   const player = await db.one('SELECT * FROM players WHERE id = $1', [id(req)]);
   if (!player) return res.redirect('/admin/players');
-  res.render('admin/player-form', { title: 'Edit player', player, errors: [] });
+  const entry = await roster.seasonPlayer(req.season.id, player.id);
+  await renderPlayerForm(req, res, { player, entry: entry ? { ...entry, on_roster: true } : { on_roster: false } });
 });
 
 router.post('/players/:id', async (req, res) => {
+  if (!needSeason(req, res)) return;
   const existing = await db.one('SELECT * FROM players WHERE id = $1', [id(req)]);
   if (!existing) return res.redirect('/admin/players');
   const p = playerFromBody({ ...req.body, active: req.body.active || 'off' });
+  const e = entryFromBody({ ...req.body, on_roster: req.body.on_roster || 'off' });
   if (!p.first_name || !p.last_name) {
-    return res.status(422).render('admin/player-form', { title: 'Edit player', player: { ...existing, ...p }, errors: ['First and last name are required.'] });
+    return renderPlayerForm(req, res, { player: { ...existing, ...p }, entry: e, errors: ['First and last name are required.'], status: 422 });
   }
-  await db.query(
-    `UPDATE players SET ${PLAYER_COLS.map((c, i) => `${c} = $${i + 1}`).join(', ')}, updated_at = now() WHERE id = $${PLAYER_COLS.length + 1}`,
-    [...PLAYER_COLS.map((c) => p[c]), existing.id]
-  );
-  await audit(req.user.id, 'player_updated', 'player', existing.id);
+  await db.tx(async (c) => {
+    await c.query(
+      `UPDATE players SET ${PLAYER_COLS.map((col, i) => `${col} = $${i + 1}`).join(', ')}, updated_at = now() WHERE id = $${PLAYER_COLS.length + 1}`,
+      [...PLAYER_COLS.map((col) => p[col]), existing.id]
+    );
+    await saveEntry(c, req.season.id, existing.id, e);
+    await audit(req.user.id, 'player_updated', 'player', existing.id, { season_id: req.season.id, on_roster: e.on_roster }, c);
+  });
   req.flash('success', 'Player updated.');
   res.redirect(`/players/${existing.id}`);
 });
@@ -203,33 +285,43 @@ router.post('/players/:id/delete', async (req, res) => {
   if (player) {
     await db.query('DELETE FROM players WHERE id = $1', [player.id]);
     await audit(req.user.id, 'player_deleted', 'player', player.id, { name: `${player.first_name} ${player.last_name}` });
-    req.flash('success', `${player.first_name} ${player.last_name} and their ratings were deleted.`);
+    req.flash('success', `${player.first_name} ${player.last_name} and all of their ratings were deleted.`);
   }
   res.redirect('/admin/players');
 });
 
 router.post('/players/:id/override', async (req, res) => {
-  const player = await db.one('SELECT * FROM players WHERE id = $1', [id(req)]);
-  if (!player) return res.redirect('/admin/players');
+  if (!needSeason(req, res)) return;
+  const entry = await roster.seasonPlayer(req.season.id, id(req));
+  if (!entry) {
+    req.flash('error', `That player isn't on the ${req.season.name} roster.`);
+    return res.redirect(`/players/${id(req)}`);
+  }
   const level = isLevel(req.body.level_override) ? req.body.level_override : null;
   const note = String(req.body.level_override_note || '').trim().slice(0, 1000) || null;
-  await db.query('UPDATE players SET level_override = $1, level_override_note = $2, updated_at = now() WHERE id = $3', [
+  await db.query('UPDATE season_players SET level_override = $1, level_override_note = $2, updated_at = now() WHERE id = $3', [
     level,
     level ? note : null,
-    player.id,
+    entry.season_player_id,
   ]);
-  await audit(req.user.id, level ? 'level_override_set' : 'level_override_cleared', 'player', player.id, { level, note });
-  req.flash('success', level ? `Final level set to ${level}.` : 'Level override cleared.');
-  res.redirect(`/players/${player.id}`);
+  await audit(req.user.id, level ? 'level_override_set' : 'level_override_cleared', 'player', entry.id, { level, note, season_id: req.season.id });
+  req.flash('success', level ? `${req.season.name} final level set to ${level}.` : 'Level override cleared.');
+  res.redirect(`/players/${entry.id}`);
 });
 
 // ---------- Import ----------
 
 router.get('/import', (req, res) => {
+  if (!needSeason(req, res)) return;
   res.render('admin/import', { title: 'Import players', result: null, seConfigured: sportsengine.isConfigured() });
 });
 
 router.post('/import', upload.single('file'), verifyCsrf, async (req, res) => {
+  if (!needSeason(req, res)) return;
+  if (Number(req.body.season_id) !== req.season.id) {
+    req.flash('error', 'The selected season changed. Please check the season and import again.');
+    return res.redirect('/admin/import');
+  }
   let rows;
   try {
     if (req.file) rows = parseUpload(req.file.buffer, req.file.originalname);
@@ -239,51 +331,9 @@ router.post('/import', upload.single('file'), verifyCsrf, async (req, res) => {
     req.flash('error', `Could not read import: ${err.message}`);
     return res.redirect('/admin/import');
   }
-  const result = await db.tx((c) => upsertPlayers(rows, 'import', c));
-  await audit(req.user.id, 'players_imported', 'player', null, { created: result.created, updated: result.updated, skipped: result.skipped });
+  const result = await db.tx((c) => upsertPlayers(rows, 'import', req.season.id, c));
+  await audit(req.user.id, 'players_imported', 'season', req.season.id, { created: result.created, updated: result.updated, skipped: result.skipped });
   res.render('admin/import', { title: 'Import players', result, seConfigured: sportsengine.isConfigured() });
-});
-
-router.post('/sportsengine/sync', async (req, res) => {
-  try {
-    const rows = await sportsengine.fetchRoster();
-    if (!rows.length) throw new Error('No players were found in the SportsEngine response.');
-    const result = await db.tx((c) => upsertPlayers(rows, 'sportsengine', c));
-    await audit(req.user.id, 'sportsengine_sync', 'player', null, { created: result.created, updated: result.updated, skipped: result.skipped });
-    res.render('admin/import', { title: 'Import players', result, seConfigured: true });
-  } catch (err) {
-    console.error(err);
-    req.flash('error', `${err.message} — open SportsEngine diagnostics for details.`);
-    res.redirect('/admin/import');
-  }
-});
-
-// Dry run: shows what the API returns and which players would be imported, without saving anything.
-router.get('/sportsengine', (req, res) => {
-  res.render('admin/sportsengine', { title: 'SportsEngine diagnostics', seConfigured: sportsengine.isConfigured(), report: null });
-});
-
-router.post('/sportsengine/diagnose', async (req, res) => {
-  const diagnostics = {};
-  let players = [];
-  let error = null;
-  try {
-    players = await sportsengine.fetchRoster({ diagnostics });
-  } catch (err) {
-    error = err.message;
-  }
-  const sample = diagnostics.sample === undefined ? null : JSON.stringify(diagnostics.sample, null, 2);
-  res.render('admin/sportsengine', {
-    title: 'SportsEngine diagnostics',
-    seConfigured: sportsengine.isConfigured(),
-    report: {
-      error,
-      diagnostics,
-      players: players.slice(0, 25),
-      total: players.length,
-      sample: sample && sample.length > 20000 ? `${sample.slice(0, 20000)}\n… (truncated)` : sample,
-    },
-  });
 });
 
 router.get('/import/template.csv', (req, res) => {
@@ -297,7 +347,7 @@ router.get('/ratings/:id/edit', async (req, res) => {
   const { ratings, categories } = await R.loadRatings({ ratingId: id(req) });
   const rating = ratings[0];
   if (!rating) return res.redirect('/players');
-  const player = await db.one('SELECT * FROM players WHERE id = $1', [rating.player_id]);
+  const player = await ratingPlayer(rating);
   res.render('ratings/form', {
     title: `Edit rating – ${player.first_name} ${player.last_name}`,
     player,
@@ -309,6 +359,11 @@ router.get('/ratings/:id/edit', async (req, res) => {
     R,
   });
 });
+
+// The player as rostered in the rating's season (falls back to the bare player record).
+async function ratingPlayer(rating) {
+  return (await roster.seasonPlayer(rating.season_id, rating.player_id)) || db.one('SELECT * FROM players WHERE id = $1', [rating.player_id]);
+}
 
 function ratingToValues(r) {
   const v = { ...r };
@@ -326,7 +381,7 @@ router.post('/ratings/:id', async (req, res) => {
   if (!rating) return res.redirect('/players');
   const { errors, data, scores } = R.parseRatingForm(req.body, categories);
   if (errors.length) {
-    const player = await db.one('SELECT * FROM players WHERE id = $1', [rating.player_id]);
+    const player = await ratingPlayer(rating);
     return res.status(422).render('ratings/form', {
       title: `Edit rating – ${player.first_name} ${player.last_name}`, player, categories, values: req.body, errors, mode: 'edit', rating, R,
     });
@@ -433,21 +488,24 @@ function csvCell(v) {
 }
 
 router.get('/export.csv', async (req, res) => {
-  const players = await db.many('SELECT * FROM players ORDER BY lower(team), lower(last_name), lower(first_name)');
+  if (!needSeason(req, res)) return;
+  const players = await roster.searchRoster(req.season.id, { includeInactive: true });
+  players.sort((a, b) => (a.team || '').localeCompare(b.team || '') || a.last_name.localeCompare(b.last_name));
   const categories = await R.getCategories();
-  const summaries = await R.summariesForPlayers(players);
-  const header = ['player_id', 'first_name', 'last_name', 'jersey_number', 'team', 'division', 'position', 'active', 'ratings_count',
+  const summaries = await R.summariesForPlayers(players, req.season.id);
+  const header = ['season', 'player_id', 'first_name', 'last_name', 'jersey_number', 'team', 'division', 'position', 'active', 'ratings_count',
     ...categories.map((c) => `avg_${c.key}`), 'avg_overall', 'calculated_level', 'avg_recommended_level', 'level_override', 'final_level', 'needs_third_review'];
   const lines = [header.join(',')];
   for (const p of players) {
     const s = summaries.get(p.id);
     lines.push([
-      p.id, p.first_name, p.last_name, p.jersey_number, p.team, p.division, p.position, p.active, s.count,
+      req.season.name, p.id, p.first_name, p.last_name, p.jersey_number, p.team, p.division, p.position, p.active, s.count,
       ...categories.map((c) => s.categoryAverages[c.id]), s.avgOverall, s.calculatedLevel, s.recommendedLevel, p.level_override, s.level,
       s.needsReview,
     ].map(csvCell).join(','));
   }
-  res.type('text/csv').attachment(`gurha-ratings-${new Date().toISOString().slice(0, 10)}.csv`);
+  const slug = req.season.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  res.type('text/csv').attachment(`gurha-ratings-${slug}-${new Date().toISOString().slice(0, 10)}.csv`);
   res.send(lines.join('\n') + '\n');
 });
 

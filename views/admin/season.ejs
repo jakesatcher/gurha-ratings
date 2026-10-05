@@ -1,0 +1,59 @@
+<%- include('../partials/head') %>
+<% const s = editSeason; %>
+<p class="crumbs"><a href="/admin/seasons">← Seasons</a></p>
+<h1><%= s.name %> <% if (s.is_current) { %><span class="tag tag-approved">Current</span><% } %></h1>
+
+<div class="grid-2">
+  <section class="card">
+    <h2>Season settings</h2>
+    <form method="post" action="/admin/seasons/<%= s.id %>" class="stack">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <label>Name <input name="name" value="<%= s.name %>" required maxlength="100"></label>
+      <div class="grid-2">
+        <label>Start date <input type="date" name="start_date" value="<%= s.start_date ? new Date(s.start_date).toISOString().slice(0, 10) : '' %>"></label>
+        <label>End date <input type="date" name="end_date" value="<%= s.end_date ? new Date(s.end_date).toISOString().slice(0, 10) : '' %>"></label>
+      </div>
+      <label class="check"><input type="checkbox" name="ratings_open" <%= s.ratings_open ? 'checked' : '' %>> Open for ratings</label>
+      <p class="small muted">Close ratings when a season is over. Raters can still view it, and admins can still edit its ratings.</p>
+      <button class="btn btn-primary" type="submit">Save</button>
+    </form>
+    <% if (s.external_id) { %><p class="small muted">Linked to SportsEngine season <%= s.external_id.slice(3) %>.</p><% } %>
+  </section>
+  <section class="card">
+    <h2>Roster</h2>
+    <ul class="list">
+      <li><a href="/admin/players">Manage players in this season</a></li>
+      <li><a href="/admin/import">Import players (CSV / JSON)</a></li>
+      <li><a href="/admin/sportsengine">Import teams from SportsEngine</a></li>
+      <li><a href="/reports/teams">Team summary reports</a></li>
+    </ul>
+    <% if (unassigned) { %><p class="small muted"><%= unassigned %> rostered player<%= unassigned === 1 ? ' has' : 's have' %> no team.</p><% } %>
+    <% if (season && season.id !== s.id) { %><p class="small alert alert-warn">You're currently viewing <strong><%= season.name %></strong>. Switch the season selector at the top to <strong><%= s.name %></strong> to manage its players.</p><% } %>
+  </section>
+</div>
+
+<section class="card">
+  <h2>Teams (<%= teams.length %>)</h2>
+  <% if (!teams.length) { %><p class="muted">No teams yet. Teams are created when you add or import players.</p><% } %>
+  <% teams.forEach(function (t) { %>
+    <form method="post" action="/admin/teams/<%= t.id %>" class="inline-form team-row">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <input name="name" value="<%= t.name %>" aria-label="Team name" required maxlength="100">
+      <input name="division" value="<%= t.division || '' %>" aria-label="Division" placeholder="Division" maxlength="100">
+      <span class="small muted nowrap"><%= t.player_count %> players<%= t.external_id ? ' · SE' : '' %></span>
+      <button class="btn btn-small" type="submit">Save</button>
+      <button class="btn btn-small btn-danger" type="submit" formaction="/admin/teams/<%= t.id %>/delete" data-confirm-click="Delete team <%= t.name %>? Its players stay on the roster without a team.">Delete</button>
+    </form>
+  <% }) %>
+</section>
+
+<% if (!ratingCount) { %>
+<section class="card">
+  <h2>Delete season</h2>
+  <form method="post" action="/admin/seasons/<%= s.id %>/delete" data-confirm="Delete <%= s.name %> and its teams and roster? Players themselves are kept.">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <button class="btn btn-danger btn-small" type="submit">Delete season</button>
+  </form>
+</section>
+<% } %>
+<%- include('../partials/foot') %>

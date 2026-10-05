@@ -1,5 +1,6 @@
 <nav class="subnav" aria-label="Admin">
   <a href="/admin" class="<%= path === '/admin' || path === '/admin/' ? 'active' : '' %>">Dashboard</a>
+  <a href="/admin/seasons" class="<%= path.startsWith('/admin/seasons') ? 'active' : '' %>">Seasons</a>
   <a href="/admin/users" class="<%= path.startsWith('/admin/users') ? 'active' : '' %>">Users</a>
   <a href="/admin/players" class="<%= path.startsWith('/admin/players') ? 'active' : '' %>">Players</a>
   <a href="/admin/import" class="<%= path.startsWith('/admin/import') ? 'active' : '' %>">Import</a>

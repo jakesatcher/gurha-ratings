@@ -29,5 +29,22 @@
     <% } %>
   </div>
 </header>
+<% if (currentUser && seasons.length) { %>
+<div class="seasonbar">
+  <form method="post" action="/season" class="seasonbar-inner">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <input type="hidden" name="return_to" value="<%= url %>">
+    <label for="season-select">Season</label>
+    <select id="season-select" name="season_id" data-autosubmit>
+      <% seasons.forEach(function (s) { %>
+        <option value="<%= s.id %>" <%= season && season.id === s.id ? 'selected' : '' %>><%= s.name %><%= s.is_current ? ' (current)' : '' %></option>
+      <% }) %>
+    </select>
+    <noscript><button class="btn btn-small" type="submit">View</button></noscript>
+    <% if (season && !season.ratings_open) { %><span class="tag tag-warn">Ratings closed</span><% } %>
+    <% if (season && !season.is_current) { %><span class="tag">Past / other season</span><% } %>
+  </form>
+</div>
+<% } %>
 <main class="container">
 <%- include('flash') %>

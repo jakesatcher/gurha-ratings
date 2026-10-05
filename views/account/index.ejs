@@ -29,7 +29,7 @@
     <ul class="list">
       <% myRatings.forEach(function (r) { %>
         <li><a href="/players/<%= r.player_id %>"><%= r.first_name %> <%= r.last_name %></a>
-          <span class="muted"><%= r.team || '' %><%= r.jersey_number ? ` #${r.jersey_number}` : '' %> · <%= fmtDate(r.created_at) %></span>
+          <span class="muted"><%= r.season_name %> · <%= r.team || '' %><%= r.jersey_number ? ` #${r.jersey_number}` : '' %> · <%= fmtDate(r.created_at) %></span>
           <%- include('../partials/level', { level: r.final_level }) %></li>
       <% }) %>
     </ul>

@@ -19,6 +19,12 @@
   </div>
 </section>
 
+<% if (!onRoster) { %>
+  <div class="alert alert-info"><%= player.first_name %> isn't on the <strong><%= season ? season.name : '' %></strong> roster.<% if (isAdmin) { %> <a href="/admin/players/<%= player.id %>/edit">Add them to this season</a>.<% } %></div>
+<% } else if (!season.ratings_open) { %>
+  <div class="alert alert-info">Ratings for <strong><%= season.name %></strong> are closed.</div>
+<% } %>
+
 <% if (summary.needsReview) { %>
   <div class="alert alert-warn">⚠️ Raters' levels differ by <%= summary.levelSpread %> levels. Per GURHA guidelines this player should be flagged for a <strong>third review</strong>.</div>
 <% } %>
@@ -26,7 +32,7 @@
 <div class="actions">
   <% if (myRating) { %>
     <span class="rated-mark">✓ You rated this player on <%= fmtDate(myRating.created_at) %></span>
-  <% } else if (player.active) { %>
+  <% } else if (canRate) { %>
     <a class="btn btn-primary" href="/players/<%= player.id %>/rate">Rate this player</a>
   <% } %>
   <% if (isAdmin) { %>
@@ -35,7 +41,7 @@
 </div>
 
 <section class="card">
-  <h2>Average ratings <span class="muted small">(<%= summary.count %> rating<%= summary.count === 1 ? '' : 's' %>)</span></h2>
+  <h2><%= season ? season.name : '' %> ratings <span class="muted small">(<%= summary.count %> rating<%= summary.count === 1 ? '' : 's' %>)</span></h2>
   <% if (!summary.count) { %>
     <p class="muted">No ratings submitted yet.</p>
   <% } else { %>
@@ -58,9 +64,9 @@
   <% } %>
 </section>
 
-<% if (isAdmin) { %>
+<% if (isAdmin && onRoster) { %>
 <section class="card">
-  <h2>Admin: final level override</h2>
+  <h2>Admin: <%= season.name %> final level override</h2>
   <form method="post" action="/admin/players/<%= player.id %>/override" class="inline-form">
     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
     <select name="level_override" aria-label="Final level">
@@ -73,8 +79,35 @@
 </section>
 <% } %>
 
+<% if (history.seasons.length) { %>
+<section class="card">
+  <h2>Season history</h2>
+  <div class="table-wrap">
+  <table class="table compact">
+    <thead><tr><th>Season</th><th>Team</th><th class="num hide-sm">#</th><th class="num">Avg</th><th>Level</th><th class="num">+/−</th><th class="num hide-sm">Ratings</th></tr></thead>
+    <tbody>
+      <% history.seasons.forEach(function (h, i) {
+           const prev = history.seasons.slice(i + 1).find(function (x) { return x.summary.avgOverall !== null; });
+           const delta = prev && h.summary.avgOverall !== null ? h.summary.avgOverall - prev.summary.avgOverall : null; %>
+        <tr class="<%= season && h.season_id === season.id ? 'current-row' : '' %>">
+          <td><%= h.season_name %></td>
+          <td><%= h.team || '—' %><span class="hide-sm"><%= h.division ? ` (${h.division})` : '' %></span></td>
+          <td class="num hide-sm"><%= h.jersey_number || '' %></td>
+          <td class="num"><%= fmt(h.summary.avgOverall) %></td>
+          <td><%- include('../partials/level', { level: h.summary.count || h.summary.overridden ? h.summary.level : null }) %></td>
+          <td class="num"><% if (delta === null) { %>—<% } else if (Math.abs(delta) < 0.005) { %>0.00<% } else { %><span class="<%= delta > 0 ? 'trend-up' : 'trend-down' %>"><%= delta > 0 ? '▲' : '▼' %> <%= Math.abs(delta).toFixed(2) %></span><% } %></td>
+          <td class="num hide-sm"><%= h.summary.count %></td>
+        </tr>
+      <% }) %>
+    </tbody>
+  </table>
+  </div>
+  <p class="small muted">Change compares the average score with the player's previous rated season.</p>
+</section>
+<% } %>
+
 <section>
-  <h2>Submitted ratings</h2>
+  <h2>Submitted ratings <span class="muted small">· <%= season ? season.name : '' %></span></h2>
   <% if (!ratings.length) { %><p class="muted">None yet.</p><% } %>
   <% ratings.forEach(function (r) { %>
     <details class="card rating-card" id="rating-<%= r.id %>" <%= r.rater_id === currentUser.id ? 'open' : '' %>>

@@ -329,3 +329,22 @@ legend h2 { margin: 0; }
   .level { border: 1px solid #000; color: #000 !important; background: #fff !important; }
 }
 .code-block { background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: .75rem; overflow: auto; max-height: 480px; font-size: .8rem; white-space: pre-wrap; word-break: break-word; }
+
+/* ---------- Season bar ---------- */
+.seasonbar { background: var(--surface); border-bottom: 1px solid var(--border); }
+.seasonbar-inner { max-width: 1100px; margin: 0 auto; padding: .4rem 16px; display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
+.seasonbar label { margin: 0; font-size: .85rem; color: var(--muted); font-weight: 600; }
+.seasonbar select { width: auto; min-width: 12rem; flex: 0 1 auto; margin: 0; min-height: 38px; padding: .3rem .6rem; font-weight: 600; }
+@media (max-width: 480px) { .seasonbar select { flex: 1 1 auto; min-width: 0; } }
+.team-pick { list-style: none; padding: 0; margin: 0; display: grid; gap: .25rem; }
+@media (min-width: 700px) { .team-pick { grid-template-columns: 1fr 1fr; } }
+.team-pick label { display: flex; align-items: center; gap: .5rem; font-weight: 500; margin: 0; padding: .5rem .6rem; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); }
+.team-pick .muted { margin-left: auto; }
+.trend-up { color: var(--ok-text); font-weight: 700; }
+.trend-down { color: var(--err-text); font-weight: 700; }
+.table tr.current-row td { background: var(--info-bg); }
+.wizard { list-style: none; display: flex; gap: .5rem; padding: 0; margin: 0 0 1rem; flex-wrap: wrap; }
+.wizard li { padding: .3rem .75rem; border-radius: 999px; background: var(--border); color: var(--muted); font-weight: 600; font-size: .85rem; }
+.wizard li.on { background: var(--brand-2); color: #fff; }
+.team-row { margin-bottom: .5rem; }
+.team-row input[name="name"] { flex: 2 1 180px; }

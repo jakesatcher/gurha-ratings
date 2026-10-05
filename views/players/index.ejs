@@ -9,7 +9,7 @@
   <div class="filter-row">
     <select name="team" aria-label="Team">
       <option value="">All teams</option>
-      <% teams.forEach(function (t) { %><option <%= filters.team === t ? 'selected' : '' %>><%= t %></option><% }) %>
+      <% teams.forEach(function (t) { %><option value="<%= t.id %>" <%= filters.team === String(t.id) ? 'selected' : '' %>><%= t.name %><%= t.division ? ` (${t.division})` : '' %></option><% }) %>
     </select>
     <select name="position" aria-label="Position">
       <option value="">All positions</option>
@@ -35,8 +35,8 @@
 <p class="muted small"><%= players.length %> player<%= players.length === 1 ? '' : 's' %></p>
 
 <% if (!players.length) { %>
-  <div class="card center"><p>No players found.</p>
-    <% if (currentUser.role === 'admin') { %><p><a href="/admin/import">Import players</a> or <a href="/admin/players/new">add one</a>.</p><% } %>
+  <div class="card center"><p>No players found on the <strong><%= season.name %></strong> roster.</p>
+    <% if (currentUser.role === 'admin') { %><p><a href="/admin/sportsengine">Import from SportsEngine</a>, <a href="/admin/import">upload a file</a> or <a href="/admin/players/new">add a player</a>.</p><% } %>
   </div>
 <% } else { %>
   <ul class="player-list">
@@ -56,7 +56,7 @@
         </a>
         <% if (rated) { %>
           <span class="rated-mark" title="You rated this player">✓<span class="hide-sm"> Rated</span></span>
-        <% } else if (p.active) { %>
+        <% } else if (p.active && season.ratings_open) { %>
           <a class="btn btn-small btn-primary" href="/players/<%= p.id %>/rate">Rate</a>
         <% } %>
       </li>

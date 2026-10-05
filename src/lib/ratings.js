@@ -98,9 +98,9 @@ const RATING_FIELDS = [
   'evidence', 'strengths', 'improvements', 'final_level',
 ];
 
-async function createRating(client, playerId, raterId, data, scores) {
-  const cols = ['player_id', 'rater_id', 'updated_by', ...RATING_FIELDS];
-  const vals = [playerId, raterId, raterId, ...RATING_FIELDS.map((f) => data[f])];
+async function createRating(client, seasonId, playerId, raterId, data, scores) {
+  const cols = ['season_id', 'player_id', 'rater_id', 'updated_by', ...RATING_FIELDS];
+  const vals = [seasonId, playerId, raterId, raterId, ...RATING_FIELDS.map((f) => data[f])];
   const { rows } = await client.query(
     `INSERT INTO ratings (${cols.join(', ')}) VALUES (${cols.map((_, i) => `$${i + 1}`).join(', ')}) RETURNING id`,
     vals
@@ -135,19 +135,32 @@ async function insertScores(client, ratingId, scores) {
   }
 }
 
-// Loads ratings for players (with scores) and computes per-rating overall/level.
-async function loadRatings({ playerIds, ratingId } = {}) {
+// Loads ratings (with scores) and computes per-rating overall/level.
+// Filter by ratingId, or by playerIds and optionally seasonId (omit seasonId for all seasons).
+async function loadRatings({ playerIds, ratingId, seasonId } = {}) {
   const categories = await getCategories();
-  const where = ratingId ? 'r.id = $1' : 'r.player_id = ANY($1::int[])';
-  const param = ratingId ? ratingId : playerIds;
+  const where = [];
+  const params = [];
+  if (ratingId) {
+    params.push(ratingId);
+    where.push(`r.id = $${params.length}`);
+  } else {
+    params.push(playerIds);
+    where.push(`r.player_id = ANY($${params.length}::int[])`);
+    if (seasonId) {
+      params.push(seasonId);
+      where.push(`r.season_id = $${params.length}`);
+    }
+  }
   const ratings = await db.many(
-    `SELECT r.*, u.name AS rater_name, u.email AS rater_email, ub.name AS updated_by_name
+    `SELECT r.*, u.name AS rater_name, u.email AS rater_email, ub.name AS updated_by_name, s.name AS season_name
        FROM ratings r
        JOIN users u ON u.id = r.rater_id
+       JOIN seasons s ON s.id = r.season_id
        LEFT JOIN users ub ON ub.id = r.updated_by
-      WHERE ${where}
+      WHERE ${where.join(' AND ')}
       ORDER BY r.created_at`,
-    [param]
+    params
   );
   if (!ratings.length) return { ratings, categories };
   const scoreRows = await db.many('SELECT * FROM rating_scores WHERE rating_id = ANY($1::int[])', [ratings.map((r) => r.id)]);
@@ -196,9 +209,10 @@ function summarize(ratings, categories, player = {}) {
   };
 }
 
-async function summariesForPlayers(players) {
+// players: roster rows for one season (level_override comes from the season entry).
+async function summariesForPlayers(players, seasonId) {
   if (!players.length) return new Map();
-  const { ratings, categories } = await loadRatings({ playerIds: players.map((p) => p.id) });
+  const { ratings, categories } = await loadRatings({ playerIds: players.map((p) => p.id), seasonId });
   const grouped = new Map(players.map((p) => [p.id, []]));
   for (const r of ratings) grouped.get(r.player_id).push(r);
   const out = new Map();
@@ -206,7 +220,30 @@ async function summariesForPlayers(players) {
   return out;
 }
 
+// One summary per season the player was rostered or rated in, newest first.
+async function playerHistory(playerId) {
+  const entries = await db.many(
+    `SELECT s.id AS season_id, s.name AS season_name, s.start_date, sp.jersey_number, sp.position, sp.level_override,
+            t.name AS team, t.division
+       FROM seasons s
+       LEFT JOIN season_players sp ON sp.season_id = s.id AND sp.player_id = $1
+       LEFT JOIN teams t ON t.id = sp.team_id
+      WHERE sp.id IS NOT NULL OR EXISTS (SELECT 1 FROM ratings r WHERE r.season_id = s.id AND r.player_id = $1)
+      ORDER BY coalesce(s.start_date, s.created_at::date) DESC, s.id DESC`,
+    [playerId]
+  );
+  const { ratings, categories } = await loadRatings({ playerIds: [playerId] });
+  return {
+    categories,
+    seasons: entries.map((e) => ({
+      ...e,
+      summary: summarize(ratings.filter((r) => r.season_id === e.season_id), categories, e),
+    })),
+  };
+}
+
 module.exports = {
+  playerHistory,
   ALREADY_RATED_MESSAGE,
   GAME_PERFORMANCE,
   AGE_AREAS,

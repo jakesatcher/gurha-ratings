@@ -4,23 +4,28 @@
 <form method="get" class="filters" role="search">
   <div class="filter-row">
     <input type="search" name="q" value="<%= q %>" placeholder="Search players" aria-label="Search players" class="search">
+    <select name="view" aria-label="Which players">
+      <option value="season">On the <%= season.name %> roster</option>
+      <option value="all" <%= view === 'all' ? 'selected' : '' %>>All players (any season)</option>
+    </select>
     <button class="btn" type="submit">Search</button>
     <a class="btn" href="/admin/export.csv">Export CSV</a>
   </div>
 </form>
+<p class="muted small"><%= players.length %> player<%= players.length === 1 ? '' : 's' %></p>
 <div class="table-wrap">
 <table class="table">
-  <thead><tr><th>Name</th><th>#</th><th>Team</th><th>Pos</th><th>Source</th><th class="num">Ratings</th><th>Level</th><th></th></tr></thead>
+  <thead><tr><th>Name</th><th>#</th><th>Team (<%= season.name %>)</th><th>Pos</th><% if (view === 'all') { %><th class="num">Seasons</th><% } %><th class="num">Ratings</th><th>Level</th><th></th></tr></thead>
   <tbody>
   <% players.forEach(function (p) { const s = summaries.get(p.id); %>
     <tr class="<%= p.active ? '' : 'inactive' %>">
       <td><a href="/players/<%= p.id %>"><%= p.last_name %>, <%= p.first_name %></a><%= p.active ? '' : ' (inactive)' %></td>
       <td><%= p.jersey_number || '' %></td>
-      <td><%= p.team || '' %></td>
+      <td><%= p.season_player_id ? (p.team || 'No team') : '— not on roster —' %></td>
       <td><%= p.position || '' %></td>
-      <td><%= p.source %></td>
+      <% if (view === 'all') { %><td class="num"><%= p.season_count %></td><% } %>
       <td class="num"><%= s.count %></td>
-      <td><%- include('../partials/level', { level: s.level }) %></td>
+      <td><%- include('../partials/level', { level: s.count || s.overridden ? s.level : null }) %></td>
       <td><a href="/admin/players/<%= p.id %>/edit">Edit</a></td>
     </tr>
   <% }) %>

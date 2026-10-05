@@ -1,0 +1,54 @@
+<%- include('../partials/head') %>
+<h1>SportsEngine diagnostics</h1>
+<%- include('_nav') %>
+<% if (!seConfigured) { %>
+  <div class="alert alert-warn">Not configured. Set <code>SPORTSENGINE_CLIENT_ID</code>, <code>SPORTSENGINE_CLIENT_SECRET</code> and <code>SPORTSENGINE_ORG_ID</code>.</div>
+<% } else { %>
+  <section class="card">
+    <p>Runs the roster query against SportsEngine and shows what comes back. <strong>Nothing is saved.</strong></p>
+    <form method="post" action="/admin/sportsengine/diagnostics">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <button class="btn btn-primary" type="submit">Run diagnostics</button>
+    </form>
+  </section>
+<% } %>
+
+<% if (report) { const d = report.diagnostics; %>
+  <% if (report.error) { %>
+    <div class="alert alert-error" role="alert"><strong>Error:</strong> <%= report.error %></div>
+  <% } else { %>
+    <div class="alert alert-success">Found <strong><%= report.total %></strong> players<%= d.pages > 1 ? ` across ${d.pages} pages` : '' %>. Use <a href="/admin/sportsengine">SportsEngine import</a> to choose a season and teams.</div>
+  <% } %>
+  <% if (d.warnings) { %><div class="alert alert-warn"><strong>API warnings:</strong> <%= d.warnings %></div><% } %>
+
+  <section class="card">
+    <h2>Summary</h2>
+    <dl class="dl">
+      <dt>Authentication</dt><dd><%= d.auth || 'failed' %></dd>
+      <dt>Query mode</dt><dd><%= d.queryMode || '—' %></dd>
+      <% if (d.teamsArgs) { %><dt>teams arguments</dt><dd><code><%= d.teamsArgs.join(', ') || '(none)' %></code></dd><% } %>
+      <% if (d.divisionsFound !== undefined) { %><dt>Divisions found</dt><dd><%= d.divisionsFound %></dd><% } %>
+      <% if (d.queries) { %><dt>Available queries</dt><dd><code class="wrap small"><%= d.queries.join(', ') %></code></dd><% } %>
+    </dl>
+  </section>
+
+  <% if (report.players.length) { %>
+  <section class="card">
+    <h2>Players that would be imported <span class="muted small">(first <%= report.players.length %>)</span></h2>
+    <div class="table-wrap"><table class="table compact">
+      <thead><tr><th>Name</th><th>#</th><th>Team</th><th>Division</th><th>Position</th><th>ID</th></tr></thead>
+      <tbody><% report.players.forEach(function (p) { %>
+        <tr><td><%= p.first_name %> <%= p.last_name %></td><td><%= p.jersey_number || '' %></td><td><%= p.team || '' %></td><td><%= p.division || '' %></td><td><%= p.position || '' %></td><td class="small muted"><%= p.external_id || '' %></td></tr>
+      <% }) %></tbody>
+    </table></div>
+  </section>
+  <% } %>
+
+  <% if (d.query) { %>
+  <details class="card"><summary><strong>GraphQL query sent</strong></summary><pre class="code-block"><%= d.query %></pre></details>
+  <% } %>
+  <% if (report.sample) { %>
+  <details class="card"><summary><strong>Raw response (first page)</strong></summary><pre class="code-block"><%= report.sample %></pre></details>
+  <% } %>
+<% } %>
+<%- include('../partials/foot') %>

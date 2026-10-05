@@ -10,6 +10,7 @@ const config = require('./config');
 const db = require('./db');
 const { csrf, flash } = require('./middleware/security');
 const { loadUser } = require('./middleware/auth');
+const { loadSeason } = require('./lib/roster');
 const levels = require('./lib/levels');
 
 function createApp() {
@@ -71,6 +72,7 @@ function createApp() {
   app.use((req, res, next) => {
     res.locals.appName = config.appName;
     res.locals.path = req.path;
+    res.locals.url = req.originalUrl;
     res.locals.levels = levels;
     res.locals.title = null;
     res.locals.currentUser = null;
@@ -84,6 +86,7 @@ function createApp() {
   app.use(flash);
   app.use(csrf);
   app.use(loadUser);
+  app.use(loadSeason);
 
   app.use(require('./routes/auth'));
   app.use(require('./routes/account'));

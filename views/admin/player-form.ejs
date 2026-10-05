@@ -6,19 +6,10 @@
   <%- include('../partials/errors') %>
   <form method="post" action="<%= isNew ? '/admin/players' : `/admin/players/${player.id}` %>" class="stack">
     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <h2>Player</h2>
     <div class="grid-2">
       <label>First name <input name="first_name" value="<%= player.first_name || '' %>" required maxlength="100" autofocus></label>
       <label>Last name <input name="last_name" value="<%= player.last_name || '' %>" required maxlength="100"></label>
-      <label>Jersey number <input name="jersey_number" value="<%= player.jersey_number || '' %>" inputmode="numeric" maxlength="10"></label>
-      <label>Position
-        <select name="position">
-          <option value="">—</option>
-          <option value="F" <%= player.position === 'F' ? 'selected' : '' %>>Forward</option>
-          <option value="D" <%= player.position === 'D' ? 'selected' : '' %>>Defense</option>
-          <option value="G" <%= player.position === 'G' ? 'selected' : '' %>>Goaltender</option>
-        </select></label>
-      <label>Team <input name="team" value="<%= player.team || '' %>" maxlength="100" list="team-options"></label>
-      <label>League / division <input name="division" value="<%= player.division || '' %>" maxlength="100"></label>
       <label>Age <input name="age" type="number" min="1" max="119" value="<%= player.age || '' %>"></label>
       <label>Email <input name="email" type="email" value="<%= player.email || '' %>" maxlength="200"></label>
     </div>
@@ -27,6 +18,25 @@
       <label class="check"><input type="checkbox" name="active" <%= player.active ? 'checked' : '' %>> Active (visible to raters)</label>
       <% if (player.external_id) { %><p class="small muted">External ID: <%= player.external_id %> · source: <%= player.source %></p><% } %>
     <% } %>
+
+    <h2><%= season.name %> roster</h2>
+    <% if (!isNew) { %>
+      <label class="check"><input type="checkbox" name="on_roster" <%= entry.on_roster ? 'checked' : '' %>> On the <%= season.name %> roster</label>
+    <% } %>
+    <datalist id="team-options"><% teams.forEach(function (t) { %><option value="<%= t.name %>"><% }) %></datalist>
+    <div class="grid-2">
+      <label>Team <input name="team" value="<%= entry.team || '' %>" maxlength="100" list="team-options" placeholder="Pick or type a new team"></label>
+      <label>League / division <small class="muted">(applies to the team)</small> <input name="division" value="<%= entry.division || '' %>" maxlength="100"></label>
+      <label>Jersey number <input name="jersey_number" value="<%= entry.jersey_number || '' %>" inputmode="numeric" maxlength="10"></label>
+      <label>Position
+        <select name="position">
+          <option value="">—</option>
+          <option value="F" <%= entry.position === 'F' ? 'selected' : '' %>>Forward</option>
+          <option value="D" <%= entry.position === 'D' ? 'selected' : '' %>>Defense</option>
+          <option value="G" <%= entry.position === 'G' ? 'selected' : '' %>>Goaltender</option>
+        </select></label>
+    </div>
+    <p class="small muted">Use the season selector at the top to edit this player's roster entry for another season.</p>
     <div class="actions">
       <button class="btn btn-primary" type="submit">Save</button>
       <% if (isNew) { %><button class="btn" type="submit" name="add_another" value="1">Save &amp; add another</button><% } %>
@@ -34,7 +44,7 @@
   </form>
   <% if (!isNew) { %>
     <hr>
-    <form method="post" action="/admin/players/<%= player.id %>/delete" data-confirm="Permanently delete this player AND all of their ratings? Consider unchecking Active instead.">
+    <form method="post" action="/admin/players/<%= player.id %>/delete" data-confirm="Permanently delete this player AND all of their ratings in every season? Consider unchecking Active instead.">
       <input type="hidden" name="_csrf" value="<%= csrfToken %>">
       <button class="btn btn-danger btn-small" type="submit">Delete player</button>
     </form>

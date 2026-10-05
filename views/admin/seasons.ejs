@@ -1,0 +1,53 @@
+<%- include('../partials/head') %>
+<h1>Seasons</h1>
+<%- include('_nav') %>
+<p class="muted">Each season has its own teams, rosters and ratings. Players carry over between seasons, so you can compare how they change. The <strong>current</strong> season is what everyone sees by default.</p>
+
+<div class="season-list">
+<% seasonsList.forEach(function (s) { %>
+  <section class="card season-card">
+    <div class="user-head">
+      <div>
+        <a href="/admin/seasons/<%= s.id %>"><strong><%= s.name %></strong></a><% if (s.external_id) { %> <span class="tag" title="Linked to a SportsEngine season">SE</span><% } %>
+        <div class="small muted"><%= s.start_date ? fmtDate(s.start_date) : 'No dates' %><%= s.end_date ? ` – ${fmtDate(s.end_date)}` : '' %></div>
+      </div>
+      <div class="user-tags">
+        <% if (s.is_current) { %><span class="tag tag-approved">Current</span><% } %>
+        <span class="tag <%= s.ratings_open ? '' : 'tag-warn' %>"><%= s.ratings_open ? 'Ratings open' : 'Ratings closed' %></span>
+      </div>
+    </div>
+    <p class="small muted"><%= s.team_count %> teams · <%= s.player_count %> players · <%= s.rating_count %> ratings</p>
+    <div class="actions">
+      <a class="btn btn-small" href="/admin/seasons/<%= s.id %>">Settings &amp; teams</a>
+      <% if (!s.is_current) { %>
+        <form method="post" action="/admin/seasons/<%= s.id %>/current" class="inline">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+          <button class="btn btn-small" type="submit">Make current</button>
+        </form>
+      <% } %>
+    </div>
+  </section>
+<% }) %>
+</div>
+
+<section class="card narrow-wide">
+  <h2>Create a season</h2>
+  <form method="post" action="/admin/seasons" class="stack">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <label>Name <input name="name" required maxlength="100" placeholder="e.g. 2026–27 Winter"></label>
+    <div class="grid-2">
+      <label>Start date <input type="date" name="start_date"></label>
+      <label>End date <input type="date" name="end_date"></label>
+    </div>
+    <label>Copy roster from <small class="muted">(optional: teams and players, not ratings)</small>
+      <select name="copy_from">
+        <option value="">— Start empty —</option>
+        <% seasonsList.forEach(function (s) { %><option value="<%= s.id %>"><%= s.name %> (<%= s.player_count %> players)</option><% }) %>
+      </select></label>
+    <label class="check"><input type="checkbox" name="ratings_open" checked> Open for ratings</label>
+    <label class="check"><input type="checkbox" name="make_current"> Make this the current season</label>
+    <button class="btn btn-primary" type="submit">Create season</button>
+  </form>
+  <p class="small muted">Importing from SportsEngine can also create the season for you: <a href="/admin/sportsengine">Browse SportsEngine</a>.</p>
+</section>
+<%- include('../partials/foot') %>

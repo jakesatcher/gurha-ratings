@@ -6,7 +6,7 @@
   <div class="filter-row">
     <select name="team" aria-label="Team" required>
       <option value="">Choose a team…</option>
-      <% teams.forEach(function (t) { %><option <%= team === t ? 'selected' : '' %>><%= t %></option><% }) %>
+      <% teams.forEach(function (t) { %><option value="<%= t.id %>" <%= team && team.id === t.id ? 'selected' : '' %>><%= t.name %><%= t.division ? ` (${t.division})` : '' %></option><% }) %>
     </select>
     <button class="btn" type="submit">Show</button>
     <% if (team) { %><button class="btn" type="button" data-print>Print</button><% } %>
@@ -20,8 +20,9 @@
     <p class="report-sub">Team player rating &amp; division summary</p>
     <dl class="dl dl-inline">
       <dt>Date</dt><dd><%= fmtDate(new Date()) %></dd>
-      <dt>Team</dt><dd><%= team %></dd>
-      <dt>League / Division</dt><dd><%= division || '—' %></dd>
+      <dt>Season</dt><dd><%= season.name %></dd>
+      <dt>Team</dt><dd><%= team.name %></dd>
+      <dt>League / Division</dt><dd><%= team.division || '—' %></dd>
     </dl>
   </div>
   <div class="table-wrap">

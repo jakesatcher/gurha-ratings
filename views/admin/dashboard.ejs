@@ -1,6 +1,7 @@
 <%- include('../partials/head') %>
 <h1>Admin</h1>
 <%- include('_nav') %>
+<p class="muted small">Showing <strong><%= season ? season.name : 'no season' %></strong>. <a href="/admin/seasons">Manage seasons</a></p>
 <div class="stats">
   <a class="stat <%= stats.pending ? 'stat-alert' : '' %>" href="/admin/users"><span class="stat-num"><%= stats.pending %></span><span>Pending requests</span></a>
   <a class="stat" href="/admin/users"><span class="stat-num"><%= stats.users %></span><span>Active users</span></a>
@@ -22,7 +23,9 @@
     <h2>Quick actions</h2>
     <ul class="list">
       <li><a href="/admin/players/new">Add a player</a></li>
-      <li><a href="/admin/import">Import players (CSV / JSON<%= seConfigured ? ' / SportsEngine' : '' %>)</a></li>
+      <li><a href="/admin/seasons">Create or manage seasons</a></li>
+      <% if (seConfigured) { %><li><a href="/admin/sportsengine">Import teams from SportsEngine</a></li><% } %>
+      <li><a href="/admin/import">Import players (CSV / JSON)</a></li>
       <li><a href="/reports/teams">Team summary reports</a></li>
       <li><a href="/admin/export.csv">Download all ratings (CSV)</a></li>
     </ul>

@@ -6,6 +6,12 @@ Approved raters search for players and score them using the official **GURHA Pla
 
 ## Features
 
+**Seasons**
+- Each season has its own teams, rosters (team, jersey, position) and ratings. Players carry over between seasons, so their history builds up over time.
+- A season selector under the header switches everything (player list, ratings, team reports, exports) to that season. The **current** season is the default.
+- Admins create seasons by hand (optionally copying the previous roster) or by importing from SportsEngine. Admins can also rename seasons, edit teams and divisions, and open or close each season for ratings.
+- Each player page shows a **season history**: team, average score, level and the change from the previous rated season.
+
 **Raters**
 - Request access. An admin must approve the request before the rater can sign in.
 - Two-step verification at every sign-in: an **authenticator app** (TOTP) or **email codes**.
@@ -22,7 +28,7 @@ Approved raters search for players and score them using the official **GURHA Pla
   | Game Execution | 10% |
 
   The form also includes the independent level assessment, game performance check, age and injury sections, evidence, strengths, areas to improve, and the final recommended level. The overall score and level update live as you score.
-- **One rating per player per rater.** This is enforced in the database. Submitting again shows:
+- **One rating per player per rater, per season.** This is enforced in the database. Submitting again in the same season shows:
   > You already rated this player. If you feel this is an error, or would like to change your rating, please contact an Admin
 - View submitted ratings and averages. Other raters show as "Rater 1", "Rater 2" by default.
 - Team summary report that mirrors the *Team Player Rating & Division Summary* sheet, and can be printed.
@@ -40,7 +46,7 @@ Approved raters search for players and score them using the official **GURHA Pla
 
 - **Rating overall** = Σ(score × weight) ÷ Σ(weights). With the default weights this is exactly the form's formula: `(Skating × .25) + (Puck × .20) + (Passing × .15) + (Shooting × .10) + (IQ × .20) + (Execution × .10)`.
 - **Calculated level** = the overall score rounded to the nearest whole number, mapped as 0=BEG, 1=D3 … 11=A1.
-- **Player final rating** = the average of all raters' overall scores. The player's level comes from that average, unless an admin set an override.
+- **Player final rating** (per season) = the average of all raters' overall scores that season. The player's level comes from that average, unless an admin set an override for that season.
 - **Raters' recommended** = the average of each rater's *final recommended level*.
 - **3rd review flag**: raters' final recommended levels differ by ≥ 2 steps.
 
@@ -61,17 +67,17 @@ Until email is configured, codes are printed to the server log. That is fine for
 
 ## SportsEngine
 
-Set `SPORTSENGINE_CLIENT_ID`, `SPORTSENGINE_CLIENT_SECRET` and `SPORTSENGINE_ORG_ID` (optionally `SPORTSENGINE_SEASON_ID`). A **Sync from SportsEngine** button then appears under Admin → Import.
+Set `SPORTSENGINE_CLIENT_ID`, `SPORTSENGINE_CLIENT_SECRET` and `SPORTSENGINE_ORG_ID`. Then use **Admin → SportsEngine**:
 
-The integration authenticates with OAuth client credentials. It then reads the GraphQL schema (introspection) and builds the roster query from the fields your API access actually exposes, so field-name differences don't break it. Arguments the schema doesn't accept are skipped; for example, `SPORTSENGINE_SEASON_ID` is ignored if `teams` has no season argument. Pages are followed automatically, and division names are resolved from `divisionId` when a `divisions` query exists.
+1. **Choose a SportsEngine season.** If your API access doesn't expose seasons, you browse all teams instead.
+2. **Tick the teams to import**, and choose the GURHA season they go into. That can be an existing season, or a new one named and dated from SportsEngine.
+3. **Import.** Teams and roster entries are created in that season. Players are matched to existing GURHA players (by SportsEngine ID, then name), so history carries across seasons. Nobody is deleted, and re-importing updates the roster in place.
 
-**Admin → SportsEngine** runs a dry run. It shows the generated query, the raw response and the players that would be imported, and saves nothing. If introspection is disabled for your account, set `SPORTSENGINE_ROSTER_QUERY` to a query from SportsEngine's docs.
-
-Existing players are matched by SportsEngine ID, then by name + team. Nobody is deleted.
+The integration authenticates with OAuth client credentials. It reads the GraphQL schema (introspection) and builds every query from the fields your access actually exposes. Teams are filtered to a season by a season argument if `teams` has one, by a season field on the team, or through divisions. Rosters are fetched per team with `team(id)` when available. **Admin → SportsEngine → Diagnostics** runs a dry run that shows the generated query and the raw response. If introspection is disabled for your account, set `SPORTSENGINE_ROSTER_QUERY`.
 
 ## Import format
 
-CSV or JSON with any of these columns: `first_name`, `last_name` (or one `name` column), `jersey_number`, `team`, `division`, `position` (F/D/G or Forward/Defense/Goalie), `age`, `email`, `external_id`, `notes`. Download a template from Admin → Import.
+Files are imported into the season selected at the top of the page. Use CSV or JSON with any of these columns: `first_name`, `last_name` (or one `name` column), `jersey_number`, `team`, `division`, `position` (F/D/G or Forward/Defense/Goalie), `age`, `email`, `external_id`, `notes`. Download a template from Admin → Import.
 
 ## Local development
 

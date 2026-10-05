@@ -12,6 +12,7 @@
 
 <section class="card form-hero">
   <h1><%= isEdit ? 'Edit rating' : 'Player rating form' %></h1>
+  <p class="muted small">Season: <strong><%= isEdit ? rating.season_name : season.name %></strong></p>
   <p class="hero-player"><strong><%= player.first_name %> <%= player.last_name %></strong>
     <span class="muted"><%= [player.jersey_number ? `#${player.jersey_number}` : null, player.team, player.division, posName[player.position], player.age ? `Age ${player.age}` : null].filter(Boolean).join(' · ') %></span></p>
   <% if (isEdit) { %>
@@ -37,6 +38,7 @@
       data-weights='<%= JSON.stringify(categories.map(c => ({ id: c.id, w: Number(c.weight) }))) %>'
       data-levels='<%= JSON.stringify(levels.LEVELS) %>'>
   <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+  <% if (!isEdit) { %><input type="hidden" name="season_id" value="<%= season.id %>"><% } %>
 
   <% categories.forEach(function (c, idx) { const cur = String(val(`score_${c.id}`)); %>
   <fieldset class="card category" id="cat-<%= c.id %>">
@@ -166,6 +168,6 @@
     <div class="submit-calc"><span class="small muted">Overall</span> <strong id="bar-score">—</strong> <span id="bar-level" class="level level-none">—</span></div>
     <button class="btn btn-primary" type="submit"><%= isEdit ? 'Save changes' : 'Submit rating' %></button>
   </div>
-  <% if (!isEdit) { %><p class="small muted center">You can submit one rating per player. To change it later, contact an Admin.</p><% } %>
+  <% if (!isEdit) { %><p class="small muted center">You can submit one rating per player each season. To change it later, contact an Admin.</p><% } %>
 </form>
 <%- include('../partials/foot') %>

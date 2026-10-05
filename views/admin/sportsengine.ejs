@@ -1,54 +1,92 @@
 <%- include('../partials/head') %>
-<h1>SportsEngine diagnostics</h1>
+<h1>SportsEngine</h1>
 <%- include('_nav') %>
-<% if (!seConfigured) { %>
-  <div class="alert alert-warn">Not configured. Set <code>SPORTSENGINE_CLIENT_ID</code>, <code>SPORTSENGINE_CLIENT_SECRET</code> and <code>SPORTSENGINE_ORG_ID</code>.</div>
-<% } else { %>
-  <section class="card">
-    <p>Runs the roster query against SportsEngine and shows what comes back. <strong>Nothing is saved.</strong></p>
-    <form method="post" action="/admin/sportsengine/diagnose">
-      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-      <button class="btn btn-primary" type="submit">Run diagnostics</button>
-    </form>
-  </section>
-<% } %>
 
-<% if (report) { const d = report.diagnostics; %>
-  <% if (report.error) { %>
-    <div class="alert alert-error" role="alert"><strong>Error:</strong> <%= report.error %></div>
+<% if (step === 'off') { %>
+  <div class="alert alert-warn">Not configured. Set <code>SPORTSENGINE_CLIENT_ID</code>, <code>SPORTSENGINE_CLIENT_SECRET</code> and <code>SPORTSENGINE_ORG_ID</code> in Railway.</div>
+
+<% } else if (step === 'seasons') { %>
+  <ol class="wizard"><li class="on">1. Season</li><li>2. Teams</li><li>3. Import</li></ol>
+  <% if (error) { %>
+    <div class="alert alert-error"><strong>Couldn't load seasons:</strong> <%= error %> <a href="/admin/sportsengine/diagnostics">Run diagnostics</a></div>
+  <% } else if (!result.supported) { %>
+    <div class="alert alert-info">Your SportsEngine API access doesn't expose seasons, so you'll pick teams directly and choose which GURHA season they go into.</div>
+    <p><a class="btn btn-primary" href="/admin/sportsengine/teams">Browse teams</a></p>
+  <% } else if (!result.seasons.length) { %>
+    <div class="alert alert-info">SportsEngine returned no seasons for your organization. <a href="/admin/sportsengine/teams">Browse all teams</a> instead.</div>
   <% } else { %>
-    <div class="alert alert-success">Found <strong><%= report.total %></strong> players<%= d.pages > 1 ? ` across ${d.pages} pages` : '' %>. Use <a href="/admin/import">Sync from SportsEngine</a> to import them.</div>
-  <% } %>
-  <% if (d.warnings) { %><div class="alert alert-warn"><strong>API warnings:</strong> <%= d.warnings %></div><% } %>
-
-  <section class="card">
-    <h2>Summary</h2>
-    <dl class="dl">
-      <dt>Authentication</dt><dd><%= d.auth || 'failed' %></dd>
-      <dt>Query mode</dt><dd><%= d.queryMode || '—' %></dd>
-      <% if (d.teamsArgs) { %><dt>teams arguments</dt><dd><code><%= d.teamsArgs.join(', ') || '(none)' %></code></dd><% } %>
-      <% if (d.divisionsFound !== undefined) { %><dt>Divisions found</dt><dd><%= d.divisionsFound %></dd><% } %>
-      <% if (d.queries) { %><dt>Available queries</dt><dd><code class="wrap small"><%= d.queries.join(', ') %></code></dd><% } %>
-    </dl>
-  </section>
-
-  <% if (report.players.length) { %>
-  <section class="card">
-    <h2>Players that would be imported <span class="muted small">(first <%= report.players.length %>)</span></h2>
-    <div class="table-wrap"><table class="table compact">
-      <thead><tr><th>Name</th><th>#</th><th>Team</th><th>Division</th><th>Position</th><th>ID</th></tr></thead>
-      <tbody><% report.players.forEach(function (p) { %>
-        <tr><td><%= p.first_name %> <%= p.last_name %></td><td><%= p.jersey_number || '' %></td><td><%= p.team || '' %></td><td><%= p.division || '' %></td><td><%= p.position || '' %></td><td class="small muted"><%= p.external_id || '' %></td></tr>
-      <% }) %></tbody>
-    </table></div>
-  </section>
+    <section class="card">
+      <h2>Choose a SportsEngine season</h2>
+      <ul class="list">
+        <% result.seasons.forEach(function (s) { const l = linked.get(s.id); %>
+          <li>
+            <a href="/admin/sportsengine/teams?<%= new URLSearchParams({ season: s.id, name: s.name, start: s.start_date || '', end: s.end_date || '' }).toString() %>"><strong><%= s.name %></strong></a>
+            <span class="muted small"><%= s.start_date ? fmtDate(s.start_date) : '' %><%= s.end_date ? ` – ${fmtDate(s.end_date)}` : '' %></span>
+            <% if (l) { %><span class="tag tag-approved">Imported as “<%= l.name %>”</span><% } %>
+          </li>
+        <% }) %>
+      </ul>
+      <p class="small"><a href="/admin/sportsengine/teams">Or browse all teams without a season filter</a></p>
+    </section>
   <% } %>
 
-  <% if (d.query) { %>
-  <details class="card"><summary><strong>GraphQL query sent</strong></summary><pre class="code-block"><%= d.query %></pre></details>
+<% } else if (step === 'teams') { %>
+  <ol class="wizard"><li>1. Season</li><li class="on">2. Teams</li><li>3. Import</li></ol>
+  <p class="crumbs"><a href="/admin/sportsengine">← Choose a different season</a></p>
+  <% if (error) { %>
+    <div class="alert alert-error"><strong>Couldn't load teams:</strong> <%= error %> <a href="/admin/sportsengine/diagnostics">Run diagnostics</a></div>
+  <% } else { %>
+    <% if (seSeason.id && result.filter === 'none') { %>
+      <div class="alert alert-warn">SportsEngine didn't give a way to filter teams by season, so <strong>all teams</strong> are listed. Select only the ones in <%= seSeason.name || 'this season' %>.</div>
+    <% } %>
+    <form method="post" action="/admin/sportsengine/import" class="stack" data-check-scope>
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <input type="hidden" name="se_season_id" value="<%= seSeason.id || '' %>">
+      <input type="hidden" name="se_season_name" value="<%= seSeason.name || '' %>">
+      <input type="hidden" name="se_start_date" value="<%= seSeason.start_date || '' %>">
+      <input type="hidden" name="se_end_date" value="<%= seSeason.end_date || '' %>">
+      <section class="card">
+        <h2>Teams<%= seSeason.name ? ` in ${seSeason.name}` : '' %> <span class="muted small">(<%= result.teams.length %>)</span></h2>
+        <% if (!result.teams.length) { %><p class="muted">No teams found.</p><% } else { %>
+          <label class="check"><input type="checkbox" data-check-all="team_ids"> Select all</label>
+          <ul class="team-pick">
+            <% result.teams.forEach(function (t) { %>
+              <li><label><input type="checkbox" name="team_ids" value="<%= t.id %>"> <%= t.name %>
+                <span class="small muted"><%= t.division || '' %><%= imported.has(t.id) ? ' · imported' : '' %></span></label></li>
+            <% }) %>
+          </ul>
+        <% } %>
+      </section>
+      <section class="card">
+        <h2>Import into</h2>
+        <% const defaultNew = !linked; %>
+        <label class="check"><input type="radio" name="target" value="new" <%= defaultNew ? 'checked' : '' %>> New GURHA season</label>
+        <div class="grid-2">
+          <label>Season name <input name="new_season_name" value="<%= seSeason.name || '' %>" maxlength="100"></label>
+          <label class="check"><input type="checkbox" name="make_current"> Make it the current season</label>
+        </div>
+        <% localSeasons.forEach(function (s) { %>
+          <label class="check"><input type="radio" name="target" value="<%= s.id %>" <%= linked && linked.id === s.id ? 'checked' : '' %>> <%= s.name %><%= s.is_current ? ' (current)' : '' %><%= linked && linked.id === s.id ? ' — linked to this SportsEngine season' : '' %></label>
+        <% }) %>
+        <p class="small muted">Players are matched to existing GURHA players (by SportsEngine ID, then name), so ratings history carries across seasons. Nobody is deleted.</p>
+      </section>
+      <% if (result.teams.length) { %><button class="btn btn-primary" type="submit">Import selected teams</button><% } %>
+    </form>
   <% } %>
-  <% if (report.sample) { %>
-  <details class="card"><summary><strong>Raw response (first page)</strong></summary><pre class="code-block"><%= report.sample %></pre></details>
-  <% } %>
+
+<% } else if (step === 'done') { %>
+  <ol class="wizard"><li>1. Season</li><li>2. Teams</li><li class="on">3. Import</li></ol>
+  <div class="alert alert-success" role="status">
+    Imported <strong><%= teamCount %></strong> team<%= teamCount === 1 ? '' : 's' %> into <strong><%= importSeason.name %></strong>:
+    <strong><%= importResult.created %></strong> new players, <strong><%= importResult.updated %></strong> existing players updated, <strong><%= importResult.skipped %></strong> skipped.
+    <% if (importResult.errors.length) { %><ul class="small"><% importResult.errors.slice(0, 50).forEach(function (e) { %><li><%= e %></li><% }) %></ul><% } %>
+  </div>
+  <p class="actions">
+    <a class="btn btn-primary" href="/players">View <%= importSeason.name %> players</a>
+    <a class="btn" href="/admin/seasons/<%= importSeason.id %>">Season settings</a>
+    <a class="btn" href="/admin/sportsengine">Import more</a>
+  </p>
 <% } %>
+
+<p class="small muted"><a href="/admin/sportsengine/diagnostics">Diagnostics (dry run)</a></p>
 <%- include('../partials/foot') %>

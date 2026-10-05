@@ -7,6 +7,24 @@
     if (msg && !window.confirm(msg)) e.preventDefault();
   });
 
+  // Confirmation for individual submit buttons (e.g. delete inside an edit form).
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest && e.target.closest('[data-confirm-click]');
+    if (btn && !window.confirm(btn.getAttribute('data-confirm-click'))) e.preventDefault();
+  });
+
+  document.querySelectorAll('select[data-autosubmit]').forEach(function (s) {
+    s.addEventListener('change', function () { s.form.submit(); });
+  });
+
+  // "Select all" checkboxes: <input type="checkbox" data-check-all="name">
+  document.querySelectorAll('[data-check-all]').forEach(function (box) {
+    box.addEventListener('change', function () {
+      var scope = box.closest('[data-check-scope]') || document;
+      scope.querySelectorAll('input[type="checkbox"][name="' + box.getAttribute('data-check-all') + '"]').forEach(function (c) { c.checked = box.checked; });
+    });
+  });
+
   document.querySelectorAll('[data-print]').forEach(function (b) {
     b.addEventListener('click', function () { window.print(); });
   });
@@ -72,7 +90,7 @@
       note.focus();
       return;
     }
-    if (!form.action.includes('/admin/') && !window.confirm('Submit this rating? You can only rate each player once.')) {
+    if (!form.action.includes('/admin/') && !window.confirm('Submit this rating? You can only rate each player once per season.')) {
       e.preventDefault();
     }
   });
