@@ -15,7 +15,19 @@ test('password policy rules', () => {
   bad('alllowercase!7x', /capital letter/);
   bad('ALLUPPERCASE!7X', /lowercase letter/);
   bad('NoNumbersHere!x', /at least 1 number/);
-  bad('NoSpecials12xyQ', /special character/);
+  bad('NoSpecial1Zx9Q', /special character/); // 14 characters: special required
+
+  // Browser / password-manager suggestions (15+ characters): special optional, 3-sequences allowed
+  ok('Hk7pTq2mWx9ZbRn'); // Chrome-style: 15 letters and digits
+  ok('wapcyp-6Fymvu-hakfez'); // Safari / iCloud Keychain style
+  ok('Xyz7pTq2mWx9ZbRn'); // a 3-letter run is fine at this length
+  bad('Abcd7pTq2mWx9ZbR', /more than 3 letters or numbers in sequence \("abcd"\)/);
+  bad('Hk7pTq2mWx91234n', /"1234"/);
+  bad('Hk7pTqqq2mWx9ZbR', /"qqq"/); // repeats still limited
+  bad('Hk7pTq2mWx9Z<bR1', /aren't allowed/); // blocked characters still blocked
+  bad('hk7ptq2mwx9zbrnq', /capital letter/); // upper/lower/digit still required
+  assert.match(policy.PASSWORDRULES, /^minlength: 15; maxlength: 128; required: upper; required: lower; required: digit;/);
+  assert.match(policy.PASSWORDRULES, /max-consecutive: 2;$/);
   for (const ch of ['<', '>', "'", '"', '`', ';', '\\', '/', '&', '=', '%', '(', ')', '{', '}', '[', ']', '|', ' ']) {
     bad(`Goalie!7xQz${ch}Ab`, /aren't allowed/);
   }
@@ -46,6 +58,7 @@ test('request access shows the requirements and rejects weak passwords', async (
   assert.match(page.text, /At least 12 characters/);
   assert.match(page.text, /No more than 2 letters or numbers in sequence/);
   assert.match(page.text, /password-policy\.js/);
+  assert.match(page.text, /autocomplete="new-password"[^>]*passwordrules="minlength: 15;/, 'browsers get the rules for generated passwords');
   const res = await agent.post('/register').type('form').send({
     _csrf: h.csrfFrom(page.text), name: 'Weak', email: 'weak@test.com', password: "Rob<script>123", password_confirm: "Rob<script>123",
   });

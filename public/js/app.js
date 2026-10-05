@@ -113,8 +113,15 @@
     var match = list.querySelector('[data-rule="match"]');
     if (match && confirm) match.classList.toggle('ok', pw.length > 0 && pw === confirm.value);
   }
-  input.addEventListener('input', update);
-  if (confirm) confirm.addEventListener('input', update);
+  // Typing fires "input"; browser/password-manager suggestions may only fire "change" (or nothing, for
+  // some autofill), so listen for both and re-check shortly after the fields gain or lose focus.
+  [input, confirm].forEach(function (el) {
+    if (!el) return;
+    el.addEventListener('input', update);
+    el.addEventListener('change', update);
+    el.addEventListener('focus', function () { setTimeout(update, 300); });
+    el.addEventListener('blur', update);
+  });
   update();
   // Block submitting until everything is met, so people fix it before a round trip.
   input.form.addEventListener('submit', function (e) {

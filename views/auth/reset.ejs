@@ -5,8 +5,8 @@
     <%- include('../partials/errors') %>
     <form method="post" class="stack">
       <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-      <label>New password <input type="password" name="password" autocomplete="new-password" minlength="12" maxlength="128" required data-password-input aria-describedby="pw-rules"></label>
-      <label>Confirm password <input type="password" name="password_confirm" autocomplete="new-password" minlength="12" maxlength="128" required data-password-confirm></label>
+      <label>New password <input type="password" name="password" autocomplete="new-password" minlength="12" maxlength="128" required data-password-input passwordrules="<%= passwordPolicy.PASSWORDRULES %>" aria-describedby="pw-rules"></label>
+      <label>Confirm password <input type="password" name="password_confirm" autocomplete="new-password" minlength="12" maxlength="128" required data-password-confirm passwordrules="<%= passwordPolicy.PASSWORDRULES %>"></label>
       <div id="pw-rules"><%- include('../partials/password-rules') %></div>
       <button class="btn btn-primary btn-block" type="submit">Save password</button>
     </form>

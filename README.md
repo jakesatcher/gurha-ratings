@@ -91,10 +91,13 @@ The integration authenticates with OAuth client credentials. It reads the GraphQ
 
 Passwords must:
 - be at least 12 characters long
-- include a capital letter, a lowercase letter, a number, and a special character from `! @ # $ ^ * _ - + . , : ? ~`
+- include a capital letter, a lowercase letter and a number
+- include a special character from `! @ # $ ^ * _ - + . , : ? ~` (optional for passwords of 15+ characters)
 - not contain characters common in XSS/SQL-injection payloads: `< > ' " ` ` ; \ / & = % ( ) { } [ ] |`, spaces, or `--`
 - not repeat a character more than twice in a row (`aaa`, `111`)
-- not run more than two letters or numbers in sequence, up or down (`abc`, `cba`, `123`, `321`)
+- not run more than two letters or numbers in sequence, up or down (`abc`, `cba`, `123`, `321`); passwords of 15+ characters may have three, but not four (`abcd`, `1234`)
+
+**Browser-suggested passwords work.** The 15-character exceptions match what browsers generate: Chrome suggests 15 random letters and digits, and Safari/iCloud Keychain uses `xxxxxx-xxxxxx-xxxxxx`. Password fields also carry a `passwordrules` attribute (`minlength: 15; … max-consecutive: 2;`), which Safari, iCloud Keychain, 1Password and other generators read so their suggestions follow the rules. The checklist updates when a password is autofilled, not just typed.
 
 The request-access, reset and change-password screens show the requirements and tick them off as you type. The rules live in one file (`public/js/password-policy.js`) used by both the browser and the server, so they can't drift apart. Passwords set before this rule are checked when the user signs in; if one doesn't qualify, the user must choose a new password before they can do anything else.
 

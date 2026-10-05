@@ -19,8 +19,8 @@
           <span><strong>Viewer</strong><br><small class="muted">View leagues, teams and player ratings only. Can't rate or change anything.</small></span>
         </label>
       </fieldset>
-      <label>Password <input type="password" name="password" autocomplete="new-password" minlength="12" maxlength="128" required data-password-input aria-describedby="pw-rules"></label>
-      <label>Confirm password <input type="password" name="password_confirm" autocomplete="new-password" minlength="12" maxlength="128" required data-password-confirm></label>
+      <label>Password <input type="password" name="password" autocomplete="new-password" minlength="12" maxlength="128" required data-password-input passwordrules="<%= passwordPolicy.PASSWORDRULES %>" aria-describedby="pw-rules"></label>
+      <label>Confirm password <input type="password" name="password_confirm" autocomplete="new-password" minlength="12" maxlength="128" required data-password-confirm passwordrules="<%= passwordPolicy.PASSWORDRULES %>"></label>
       <div id="pw-rules"><%- include('../partials/password-rules') %></div>
       <label>Note for the admin <small class="muted">(optional — e.g. your team or role)</small>
         <textarea name="request_note" rows="2" maxlength="1000"><%= values.request_note || '' %></textarea></label>
