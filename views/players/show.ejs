@@ -26,7 +26,7 @@
 
 <% if (!onRoster) { %>
   <div class="alert alert-info"><%= player.first_name %> isn't on the <strong><%= season ? season.name : '' %></strong> roster.<% if (isAdmin) { %> <a href="/admin/players/<%= player.id %>/edit">Add them to this season</a>.<% } %></div>
-<% } else if (!season.ratings_open) { %>
+<% } else if (!season.ratings_open && currentUser.canRate) { %>
   <div class="alert alert-info">Ratings for <strong><%= season.name %></strong> are closed.</div>
 <% } %>
 

@@ -12,7 +12,7 @@
 <div class="scoreboard">
   <div><span class="sb-num"><%= totals.players %></span><span class="sb-label">Players</span></div>
   <div><span class="sb-num"><%= totals.rated %></span><span class="sb-label">Rated</span></div>
-  <div><span class="sb-num"><%= totals.ratedByMe %></span><span class="sb-label">By you</span></div>
+  <% if (currentUser.canRate) { %><div><span class="sb-num"><%= totals.ratedByMe %></span><span class="sb-label">By you</span></div><% } %>
   <div><span class="sb-num"><%= leagues.length %></span><span class="sb-label">Leagues</span></div>
 </div>
 
@@ -30,7 +30,7 @@
       <span class="league-meta"><%= l.teams.length %> team<%= l.teams.length === 1 ? '' : 's' %> · <%= l.stats.players %> players</span>
       <%- include('../partials/progress', { done: l.stats.rated, total: l.stats.players }) %>
       <span class="league-foot">
-        <span class="small">You've rated <strong><%= l.stats.ratedByMe %></strong></span>
+        <% if (currentUser.canRate) { %><span class="small">You've rated <strong><%= l.stats.ratedByMe %></strong></span><% } %>
         <% if (l.stats.review) { %><span class="tag tag-warn"><%= l.stats.review %> 3rd review</span><% } %>
         <span class="small muted">Avg</span> <%- include('../partials/level', { level: l.stats.level }) %>
       </span>

@@ -17,9 +17,12 @@
       </div>
       <div class="user-tags">
         <span class="tag tag-<%= u.status %>"><%= u.status %></span>
-        <span class="tag"><%= u.role %></span>
+        <span class="tag <%= u.role === 'viewer' ? 'tag-pending' : '' %>"><%= u.role %></span>
       </div>
     </div>
+    <% if ((u.status === 'pending' || u.status === 'rejected') && u.requested_role) { %>
+      <p class="small"><strong>Requested:</strong> <%= u.requested_role === 'viewer' ? 'Viewer access (view only)' : 'Rater access (view and rate)' %></p>
+    <% } %>
     <% if (u.request_note) { %><p class="small">“<%= u.request_note %>”</p><% } %>
     <p class="small muted">
       Requested <%= fmtDate(u.created_at) %>
@@ -29,13 +32,13 @@
       <% if (u.last_login_at) { %> · last sign-in <%= fmtDate(u.last_login_at) %><% } %>
     </p>
     <div class="actions">
-      <% if (u.status === 'pending') { %>
-        <% btn(u, 'approve', 'Approve', 'btn-primary') %>
-        <% btn(u, 'reject', 'Reject', 'btn-danger', `Reject ${u.name}'s request?`) %>
-      <% } else if (u.status === 'rejected') { %>
-        <% btn(u, 'approve', 'Approve') %>
+      <% if (u.status === 'pending' || u.status === 'rejected') { const wantsViewer = (u.requested_role || u.role) === 'viewer'; %>
+        <% if (u.role === 'admin') { btn(u, 'approve', 'Approve', 'btn-primary') } else if (wantsViewer) { btn(u, 'approve-viewer', 'Approve as Viewer', 'btn-primary'); btn(u, 'approve-rater', 'Approve as Rater') } else { btn(u, 'approve-rater', 'Approve as Rater', 'btn-primary'); btn(u, 'approve-viewer', 'Approve as Viewer') } %>
+        <% if (u.status === 'pending') { btn(u, 'reject', 'Reject', 'btn-danger', `Reject ${u.name}'s request?`) } %>
       <% } else if (u.status === 'approved' && !self) { %>
-        <% if (u.role === 'rater') { btn(u, 'make-admin', 'Make admin', '', `Give ${u.name} admin permissions?`) } else { btn(u, 'make-rater', 'Make rater') } %>
+        <% if (u.role !== 'admin') { btn(u, 'make-admin', 'Make admin', '', `Give ${u.name} admin permissions?`) } %>
+        <% if (u.role !== 'rater') { btn(u, 'make-rater', 'Make rater') } %>
+        <% if (u.role !== 'viewer') { btn(u, 'make-viewer', 'Make viewer', '', `Make ${u.name} a viewer? They'll be able to see ratings but not submit them.`) } %>
         <% btn(u, 'reset-mfa', 'Reset 2-step', '', `Reset two-step verification for ${u.name}? They'll set it up again at next sign-in.`) %>
         <% btn(u, 'disable', 'Disable', 'btn-danger', `Disable ${u.name}? They'll be signed out immediately.`) %>
       <% } else if (u.status === 'disabled') { %>

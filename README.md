@@ -6,6 +6,16 @@ Approved raters search for players and score them using the official **GURHA Pla
 
 ## Features
 
+**Roles**
+
+| Role | Can do |
+|---|---|
+| **Viewer** | Browse every league, team and player, and see averages, submitted ratings and team summaries. Can't rate or change anything. |
+| **Rater** | Everything a viewer can, plus submit one rating per player per season. |
+| **Admin** | Everything, including approving users, managing players, seasons and imports, and editing ratings. |
+
+People choose **Rater** or **Viewer** when they request access. The admin alert and the Users page show the choice, and the admin approves as either. Admins can change anyone's role later (Make admin / Make rater / Make viewer). Rating pages are blocked on the server for viewers, not just hidden. Viewers can still manage their own password and 2-step verification.
+
 **Seasons**
 - Each season has its own teams, rosters (team, jersey, position) and ratings. Players carry over between seasons, so their history builds up over time.
 - A season selector under the header switches everything (player list, ratings, team reports, exports) to that season. The **current** season is the default.

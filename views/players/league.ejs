@@ -15,7 +15,7 @@
       <span class="team-meta small"><%= t.stats.players %> players<%= t.stats.review ? ` · ${t.stats.review} need 3rd review` : '' %></span>
       <%- include('../partials/progress', { done: t.stats.rated, total: t.stats.players }) %>
       <span class="league-foot">
-        <span class="small">You've rated <strong><%= t.stats.ratedByMe %></strong></span>
+        <% if (currentUser.canRate) { %><span class="small">You've rated <strong><%= t.stats.ratedByMe %></strong></span><% } %>
         <span class="small muted">Avg <%= fmt(t.stats.avg) %></span>
         <%- include('../partials/level', { level: t.stats.level }) %>
       </span>

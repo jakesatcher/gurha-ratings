@@ -519,3 +519,10 @@ h2 { text-transform: uppercase; font-weight: 600; }
 .pw-rules:not(.pw-live) .pw-icon { border-radius: 2px; width: .4rem; height: .4rem; flex-basis: .4rem; margin: .45rem .3rem 0; background: var(--muted); border: 0; }
 .pw-rules li.ok { color: var(--ok-text); }
 .pw-rules li.ok .pw-icon { border-color: var(--ok-text); background: var(--ok-text); box-shadow: inset 0 0 0 2px var(--surface); }
+
+/* Request access: role choice */
+.role-choice { border: 0; padding: 0; margin: 0 0 .85rem; }
+.role-choice legend { float: none; font-weight: 600; font-size: .92rem; margin-bottom: .35rem; }
+.role-option { display: flex; gap: .65rem; align-items: flex-start; font-weight: 500; padding: .65rem .8rem; margin-bottom: .45rem; border: 2px solid var(--border); border-radius: 10px; background: var(--surface-2); cursor: pointer; }
+.role-option input { margin-top: .25rem; }
+.role-option:has(input:checked) { border-color: var(--brand-2); background: var(--info-bg); }

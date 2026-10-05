@@ -3,7 +3,7 @@
 const express = require('express');
 const config = require('../config');
 const db = require('../db');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, requireRater } = require('../middleware/auth');
 const { audit } = require('../lib/audit');
 const R = require('../lib/ratings');
 const roster = require('../lib/roster');
@@ -173,7 +173,7 @@ router.get('/players/:id', requireAuth, async (req, res) => {
     summary,
     myRating,
     history,
-    canRate: Boolean(entry && base.active && req.season.ratings_open),
+    canRate: Boolean(req.user.canRate && entry && base.active && req.season.ratings_open),
   });
 });
 
@@ -203,7 +203,7 @@ async function existingRating(req, player) {
   return db.one('SELECT id FROM ratings WHERE season_id = $1 AND player_id = $2 AND rater_id = $3', [req.season.id, player.id, req.user.id]);
 }
 
-router.get('/players/:id/rate', requireAuth, async (req, res) => {
+router.get('/players/:id/rate', requireRater, async (req, res) => {
   const player = await ratablePlayer(req, res);
   if (!player) return;
   if (await existingRating(req, player)) return renderAlreadyRated(res, player);
@@ -211,7 +211,7 @@ router.get('/players/:id/rate', requireAuth, async (req, res) => {
   res.render('ratings/form', { title: `Rate ${player.first_name} ${player.last_name}`, player, categories, values: {}, errors: [], mode: 'create', R });
 });
 
-router.post('/players/:id/rate', requireAuth, async (req, res) => {
+router.post('/players/:id/rate', requireRater, async (req, res) => {
   const player = await ratablePlayer(req, res);
   if (!player) return;
   // Guard against the season being switched in another tab while the form was open.

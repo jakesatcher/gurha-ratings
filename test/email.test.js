@@ -139,7 +139,7 @@ test('admin email page, test send, alert opt-out and security notices', async ()
   const anon = h.request.agent(app);
   const reg = await anon.get('/register');
   await anon.post('/register').type('form').send({
-    _csrf: h.csrfFrom(reg.text), name: 'New Person', email: 'new@test.com', password: 'Slapshot!Goal47', password_confirm: 'Slapshot!Goal47', request_note: 'I play on the Hawks',
+    _csrf: h.csrfFrom(reg.text), name: 'New Person', email: 'new@test.com', password: 'Slapshot!Goal47', password_confirm: 'Slapshot!Goal47', request_note: 'I play on the Hawks', requested_role: 'rater',
   });
   await until(() => resend.requests.some((r) => r.body.to[0] === 'boss@test.com'));
   const alert = resend.requests.find((r) => r.body.to[0] === 'boss@test.com');
@@ -151,7 +151,7 @@ test('admin email page, test send, alert opt-out and security notices', async ()
   resend.requests.length = 0;
   const reg2 = await anon.get('/register');
   const again = await anon.post('/register').type('form').send({
-    _csrf: h.csrfFrom(reg2.text), name: 'Imposter', email: 'NEW@test.com', password: 'Different!Pass47', password_confirm: 'Different!Pass47',
+    _csrf: h.csrfFrom(reg2.text), name: 'Imposter', email: 'NEW@test.com', password: 'Different!Pass47', password_confirm: 'Different!Pass47', requested_role: 'viewer',
   });
   assert.match(again.text, /Request submitted/);
   await until(() => resend.requests.some((r) => r.body.to[0] === 'boss@test.com'));

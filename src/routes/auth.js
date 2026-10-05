@@ -86,7 +86,15 @@ async function notifyAdminsOfRequest(requester, note, { repeat = false, previous
     mailer.sendQuietly({
       to: a.email,
       userId: a.id,
-      ...emails.accessRequested({ name: requester.name, email: requester.email, note, pendingCount, repeat, previousStatus }),
+      ...emails.accessRequested({
+        name: requester.name,
+        email: requester.email,
+        note,
+        pendingCount,
+        repeat,
+        previousStatus,
+        requestedRole: requester.requested_role || requester.role,
+      }),
     });
   }
 }
@@ -101,20 +109,23 @@ router.post('/register', registerLimiter, async (req, res) => {
     name: String(req.body.name || '').trim().slice(0, 100),
     email: String(req.body.email || '').trim().toLowerCase().slice(0, 200),
     request_note: String(req.body.request_note || '').trim().slice(0, 1000),
+    requested_role: req.body.requested_role,
   };
   const errors = [];
+  if (!['rater', 'viewer'].includes(values.requested_role)) errors.push('Choose Rater or Viewer access.');
   if (!values.name) errors.push('Name is required.');
   if (!EMAIL_RE.test(values.email)) errors.push('Enter a valid email address.');
   errors.push(...passwordProblems(req.body.password, req.body.password_confirm));
   if (errors.length) return res.status(422).render('auth/register', { title: 'Request access', values, errors });
 
-  const existing = await db.one('SELECT id, name, email, status, request_note FROM users WHERE lower(email) = $1', [values.email]);
+  const existing = await db.one('SELECT id, name, email, status, request_note, requested_role, role FROM users WHERE lower(email) = $1', [values.email]);
   let requester = null;
   let repeat = false;
   if (!existing) {
     requester = await db.one(
-      `INSERT INTO users (email, name, password_hash, request_note) VALUES ($1, $2, $3, $4) RETURNING id, name, email`,
-      [values.email, values.name, await bcrypt.hash(req.body.password, 12), values.request_note || null]
+      `INSERT INTO users (email, name, password_hash, request_note, role, requested_role) VALUES ($1, $2, $3, $4, $5, $5)
+       RETURNING id, name, email, requested_role`,
+      [values.email, values.name, await bcrypt.hash(req.body.password, 12), values.request_note || null, values.requested_role]
     );
     await audit(requester.id, 'access_requested', 'user', requester.id);
   } else if (['pending', 'rejected'].includes(existing.status)) {

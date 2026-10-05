@@ -20,7 +20,7 @@
   </a>
   <% if (rated) { %>
     <span class="rated-mark" title="You rated this player">✓<span class="hide-sm"> Rated</span></span>
-  <% } else if (p.active && season.ratings_open) { %>
+  <% } else if (currentUser.canRate && p.active && season.ratings_open) { %>
     <a class="btn btn-small btn-primary" href="/players/<%= p.id %>/rate">Rate</a>
   <% } %>
 </li>

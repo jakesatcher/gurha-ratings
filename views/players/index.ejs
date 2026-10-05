@@ -20,8 +20,10 @@
     </select>
     <select name="status" aria-label="Status">
       <option value="">Everyone</option>
+      <% if (currentUser.canRate) { %>
       <option value="unrated" <%= filters.status === 'unrated' ? 'selected' : '' %>>Not rated by me</option>
       <option value="rated" <%= filters.status === 'rated' ? 'selected' : '' %>>Rated by me</option>
+      <% } %>
       <option value="none" <%= filters.status === 'none' ? 'selected' : '' %>>No ratings yet</option>
       <option value="review" <%= filters.status === 'review' ? 'selected' : '' %>>Needs 3rd review</option>
     </select>

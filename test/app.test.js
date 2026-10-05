@@ -37,7 +37,7 @@ test('access request → admin approval → MFA → rating once → duplicate er
   const anon = h.request.agent(app);
   const reg = await anon.get('/register');
   const r = await anon.post('/register').type('form').send({
-    _csrf: h.csrfFrom(reg.text), name: 'Riley Rater', email: 'Riley@Test.com', password: 'Slapshot!Goal47', password_confirm: 'Slapshot!Goal47',
+    _csrf: h.csrfFrom(reg.text), name: 'Riley Rater', email: 'Riley@Test.com', password: 'Slapshot!Goal47', password_confirm: 'Slapshot!Goal47', requested_role: 'rater',
   });
   assert.strictEqual(r.status, 200);
   assert.match(r.text, /Request submitted/);
@@ -350,4 +350,76 @@ test('bulk merge of exact matches cleans up records created before identity matc
   assert.strictEqual(left[0].id, a.id, 'keeps the record without the (Sub) tag');
   assert.strictEqual(left[0].last_name, 'Hassan');
   assert.deepStrictEqual(left[0].ids, ['se:79249232', 'se:79380718']);
+});
+
+test('viewer role: request, approve, browse everything, but never rate or modify', async () => {
+  await h.createUser({ email: 'v-admin@test.com', name: 'View Admin', role: 'admin' });
+  const admin = await h.login(app, 'v-admin@test.com');
+
+  // A season with a rated player, so there is something to view
+  await h.post(admin, '/admin/players', { first_name: 'Vic', last_name: 'Viewable', team: 'Owls', division: 'D2', jersey_number: '8' }, '/admin/players/new');
+  const vic = await h.db.one(`SELECT id FROM players WHERE last_name = 'Viewable'`);
+  await h.post(admin, `/players/${vic.id}/rate`, fullRating());
+
+  // Request access: role choice required
+  const anon = h.request.agent(app);
+  const reg = await anon.get('/register');
+  assert.match(reg.text, /name="requested_role" value="rater"/);
+  assert.match(reg.text, /name="requested_role" value="viewer"/);
+  const noRole = await anon.post('/register').type('form').send({
+    _csrf: h.csrfFrom(reg.text), name: 'Val Viewer', email: 'val@test.com', password: 'Slapshot!Goal47', password_confirm: 'Slapshot!Goal47',
+  });
+  assert.strictEqual(noRole.status, 422);
+  assert.match(noRole.text, /Choose Rater or Viewer access/);
+  await anon.post('/register').type('form').send({
+    _csrf: h.csrfFrom(reg.text), name: 'Val Viewer', email: 'val@test.com', password: 'Slapshot!Goal47', password_confirm: 'Slapshot!Goal47', requested_role: 'viewer',
+  });
+  const val = await h.db.one(`SELECT * FROM users WHERE email = 'val@test.com'`);
+  assert.deepStrictEqual([val.role, val.requested_role, val.status], ['viewer', 'viewer', 'pending']);
+  const alert = [...h.mailer.outbox].reverse().find((m) => /Access request: Val Viewer/.test(m.subject));
+  assert.match(alert.text, /requested Viewer \(view only\) access/);
+
+  // Admin sees the request and approves as a viewer
+  const users = await admin.get('/admin/users');
+  assert.match(users.text, /Requested:<\/strong> Viewer access/);
+  assert.match(users.text, /Approve as Viewer/);
+  await h.post(admin, `/admin/users/${val.id}/approve-viewer`, {}, '/admin/users');
+  assert.strictEqual((await h.db.one('SELECT role, status FROM users WHERE id = $1', [val.id])).status, 'approved');
+  const approved = [...h.mailer.outbox].reverse().find((m) => m.to === 'val@test.com' && /approved/.test(m.subject));
+  assert.match(approved.text, /Viewer access/);
+
+  // Viewer can browse leagues, teams, players and ratings
+  const viewer = await h.login(app, 'val@test.com', 'Slapshot!Goal47');
+  const leagues = await viewer.get('/players');
+  assert.strictEqual(leagues.status, 200);
+  assert.match(leagues.text, /league-crest">D2</);
+  assert.doesNotMatch(leagues.text, /By you|You've rated|haven't rated/);
+  const owls = await h.db.one(`SELECT id FROM teams WHERE name = 'Owls'`);
+  const team = await viewer.get(`/teams/${owls.id}`);
+  assert.match(team.text, /Viewable, Vic/);
+  assert.doesNotMatch(team.text, /\/rate"/, 'no Rate buttons');
+  const playerPage = await viewer.get(`/players/${vic.id}`);
+  assert.match(playerPage.text, /Submitted ratings/);
+  assert.match(playerPage.text, /6\.80/, 'sees the average');
+  assert.doesNotMatch(playerPage.text, /Rate this player|Edit player|Edit rating/);
+  assert.match((await viewer.get('/players?q=vic')).text, /Viewable, Vic/);
+  assert.strictEqual((await viewer.get(`/reports/teams?team=${owls.id}`)).status, 200);
+
+  // …but can't rate or reach admin
+  const rateForm = await viewer.get(`/players/${vic.id}/rate`);
+  assert.strictEqual(rateForm.status, 403);
+  assert.match(rateForm.text, /Viewer access/);
+  assert.strictEqual((await h.post(viewer, `/players/${vic.id}/rate`, fullRating())).status, 403);
+  assert.strictEqual((await h.db.one('SELECT count(*)::int AS n FROM ratings WHERE player_id = $1', [vic.id])).n, 1);
+  assert.strictEqual((await viewer.get('/admin')).status, 403);
+  assert.strictEqual((await h.post(viewer, '/admin/players', { first_name: 'X', last_name: 'Y' })).status, 403);
+  const account = await viewer.get('/account');
+  assert.match(account.text, /Viewer \(view only\)/);
+  assert.doesNotMatch(account.text, /My ratings/);
+
+  // Admin can switch roles both ways
+  await h.post(admin, `/admin/users/${val.id}/make-rater`, {}, '/admin/users');
+  assert.strictEqual((await viewer.get(`/players/${vic.id}/rate`)).status, 200, 'takes effect on the next request');
+  await h.post(admin, `/admin/users/${val.id}/make-viewer`, {}, '/admin/users');
+  assert.strictEqual((await viewer.get(`/players/${vic.id}/rate`)).status, 403);
 });

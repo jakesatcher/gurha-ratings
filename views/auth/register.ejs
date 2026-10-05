@@ -1,13 +1,24 @@
 <%- include('../partials/head') %>
 <section class="auth">
   <div class="card narrow">
-    <h1>Request rater access</h1>
+    <h1>Request access</h1>
     <p class="muted">An admin must approve your request before you can sign in.</p>
     <%- include('../partials/errors') %>
     <form method="post" action="/register" class="stack">
       <input type="hidden" name="_csrf" value="<%= csrfToken %>">
       <label>Full name <input name="name" value="<%= values.name || '' %>" autocomplete="name" required maxlength="100"></label>
       <label>Email <input type="email" name="email" value="<%= values.email || '' %>" autocomplete="email" required></label>
+      <fieldset class="role-choice">
+        <legend>Access you're requesting</legend>
+        <label class="role-option">
+          <input type="radio" name="requested_role" value="rater" required <%= values.requested_role === 'rater' ? 'checked' : '' %>>
+          <span><strong>Rater</strong><br><small class="muted">View leagues, teams and player ratings, and rate players.</small></span>
+        </label>
+        <label class="role-option">
+          <input type="radio" name="requested_role" value="viewer" <%= values.requested_role === 'viewer' ? 'checked' : '' %>>
+          <span><strong>Viewer</strong><br><small class="muted">View leagues, teams and player ratings only. Can't rate or change anything.</small></span>
+        </label>
+      </fieldset>
       <label>Password <input type="password" name="password" autocomplete="new-password" minlength="12" maxlength="128" required data-password-input aria-describedby="pw-rules"></label>
       <label>Confirm password <input type="password" name="password_confirm" autocomplete="new-password" minlength="12" maxlength="128" required data-password-confirm></label>
       <div id="pw-rules"><%- include('../partials/password-rules') %></div>

@@ -6,7 +6,7 @@
     <dl class="dl">
       <dt>Name</dt><dd><%= currentUser.name %></dd>
       <dt>Email</dt><dd><%= currentUser.email %></dd>
-      <dt>Role</dt><dd><%= currentUser.role === 'admin' ? 'Admin' : 'Rater' %></dd>
+      <dt>Role</dt><dd><%= ({ admin: 'Admin', rater: 'Rater', viewer: 'Viewer (view only)' })[currentUser.role] %></dd>
       <dt>Two-step</dt><dd><%= currentUser.mfa_method === 'totp' ? 'Authenticator app' : 'Email codes' %> · <a href="/mfa/setup">Change</a></dd>
     </dl>
   </section>
@@ -32,6 +32,7 @@
     </form>
   </section>
 </div>
+<% if (currentUser.canRate) { %>
 <section class="card">
   <h2>My ratings (<%= myRatings.length %>)</h2>
   <% if (!myRatings.length) { %>
@@ -46,4 +47,5 @@
     </ul>
   <% } %>
 </section>
+<% } %>
 <%- include('../partials/foot') %>

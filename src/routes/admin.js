@@ -88,13 +88,19 @@ router.post('/users/:id/:action', async (req, res) => {
 
   switch (action) {
     case 'approve':
-      await db.query(`UPDATE users SET status = 'approved', approved_by = $1, approved_at = now(), updated_at = now() WHERE id = $2`, [
+    case 'approve-rater':
+    case 'approve-viewer': {
+      // Approving an admin keeps them an admin; otherwise use the chosen (or requested) role.
+      const role = target.role === 'admin' ? 'admin' : action === 'approve-viewer' ? 'viewer' : action === 'approve-rater' ? 'rater' : target.role;
+      await db.query(`UPDATE users SET status = 'approved', role = $1, approved_by = $2, approved_at = now(), updated_at = now() WHERE id = $3`, [
+        role,
         req.user.id,
         target.id,
       ]);
-      mailer.sendQuietly({ to: target.email, userId: target.id, ...emails.accessApproved({ name: target.name }) });
-      req.flash('success', `${target.name} approved.`);
+      mailer.sendQuietly({ to: target.email, userId: target.id, ...emails.accessApproved({ name: target.name, role }) });
+      req.flash('success', `${target.name} approved as ${{ admin: 'an admin', rater: 'a rater', viewer: 'a viewer' }[role]}.`);
       break;
+    }
     case 'reject':
       if (self) break;
       await db.query(`UPDATE users SET status = 'rejected', updated_at = now() WHERE id = $1`, [target.id]);
@@ -125,6 +131,14 @@ router.post('/users/:id/:action', async (req, res) => {
       }
       await db.query(`UPDATE users SET role = 'rater', updated_at = now() WHERE id = $1`, [target.id]);
       req.flash('success', `${target.name} is now a rater.`);
+      break;
+    case 'make-viewer':
+      if (self || isLastAdmin) {
+        req.flash('error', 'You cannot remove your own admin role or the last admin.');
+        break;
+      }
+      await db.query(`UPDATE users SET role = 'viewer', updated_at = now() WHERE id = $1`, [target.id]);
+      req.flash('success', `${target.name} is now a viewer (view only).`);
       break;
     case 'reset-mfa':
       await db.query(`UPDATE users SET mfa_method = NULL, totp_secret_enc = NULL, updated_at = now() WHERE id = $1`, [target.id]);

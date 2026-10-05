@@ -61,17 +61,18 @@ function code({ code: c, purpose, minutes }) {
 
 // ---------- Access requests ----------
 
-function accessRequested({ name, email, note, pendingCount, repeat = false, previousStatus = null }) {
+function accessRequested({ name, email, note, pendingCount, repeat = false, previousStatus = null, requestedRole = 'rater' }) {
+  const roleLabel = requestedRole === 'viewer' ? 'Viewer (view only)' : 'Rater';
   const again = repeat ? (previousStatus === 'rejected' ? ' again (previously not approved)' : ' again (still waiting)') : '';
   return {
     kind: 'access_requested',
     subject: `Access request${repeat ? ' (repeat request)' : ''}: ${name}`,
-    text: `${name} (${email}) requested rater access${again}.${note ? `\n\n"${note}"` : ''}\n\n${pendingCount} request(s) waiting. Review: ${config.appUrl}/admin/users\n\nTurn these alerts off on your account page.`,
+    text: `${name} (${email}) requested ${roleLabel} access${again}.${note ? `\n\n"${note}"` : ''}\n\n${pendingCount} request(s) waiting. Review: ${config.appUrl}/admin/users\n\nTurn these alerts off on your account page.`,
     html: layout({
       preheader: `${name} wants to become a rater.`,
       heading: 'New access request',
       body:
-        p(`<strong>${esc(name)}</strong> (${esc(email)}) requested rater access${esc(again)}.`) +
+        p(`<strong>${esc(name)}</strong> (${esc(email)}) requested <strong>${esc(roleLabel)}</strong> access${esc(again)}.`) +
         (note ? `<blockquote style="margin:0 0 14px;padding:10px 14px;background:#f1f5f9;border-left:4px solid ${NAVY};border-radius:6px">${esc(note)}</blockquote>` : '') +
         p(`${pendingCount} request${pendingCount === 1 ? ' is' : 's are'} waiting for review.`) +
         button(`${config.appUrl}/admin/users`, 'Review requests'),
@@ -80,20 +81,26 @@ function accessRequested({ name, email, note, pendingCount, repeat = false, prev
   };
 }
 
-function accessApproved({ name }) {
+function accessApproved({ name, role = 'rater' }) {
+  const viewer = role === 'viewer';
+  const what = viewer
+    ? 'You have <strong>Viewer</strong> access: you can browse every league, team and player and see their ratings.'
+    : role === 'admin'
+      ? 'You have <strong>Admin</strong> access.'
+      : 'You have <strong>Rater</strong> access: you can browse every league, team and player and submit ratings.';
   return {
     kind: 'access_approved',
     subject: "You're approved for GURHA Ratings",
-    text: `Hi ${name},\n\nYour access to GURHA Ratings has been approved. Sign in at ${config.appUrl}/login\n\nOn your first sign-in you'll set up two-step verification (an authenticator app or email codes).\n\nRate what you see — not what you think.`,
+    text: `Hi ${name},\n\nYour ${viewer ? 'Viewer' : role === 'admin' ? 'Admin' : 'Rater'} access to GURHA Ratings has been approved. Sign in at ${config.appUrl}/login\n\nOn your first sign-in you'll set up two-step verification (an authenticator app or email codes).${viewer ? '' : '\n\nRate what you see — not what you think.'}`,
     html: layout({
-      preheader: 'Your rater access is ready.',
+      preheader: `Your ${viewer ? 'viewer' : role === 'admin' ? 'admin' : 'rater'} access is ready.`,
       heading: "You're approved!",
       body:
         p(`Hi ${esc(name)},`) +
-        p('Your access to GURHA Ratings has been approved. Welcome to the rater bench.') +
+        p(`Your access to GURHA Ratings has been approved. ${what}`) +
         button(`${config.appUrl}/login`, 'Sign in') +
         p("On your first sign-in you'll set up two-step verification with an authenticator app or email codes.") +
-        p('<em>Rate what you see — not what you think.</em>'),
+        (viewer ? '' : p('<em>Rate what you see — not what you think.</em>')),
     }),
   };
 }
