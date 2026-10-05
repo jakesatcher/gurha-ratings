@@ -10,7 +10,8 @@
     <div class="grid-2">
       <label>First name <input name="first_name" value="<%= player.first_name || '' %>" required maxlength="100" autofocus></label>
       <label>Last name <input name="last_name" value="<%= player.last_name || '' %>" required maxlength="100"></label>
-      <label>Age <input name="age" type="number" min="1" max="119" value="<%= player.age || '' %>"></label>
+      <label>Date of birth <input name="birth_date" type="date" value="<%= player.birth_date ? new Date(player.birth_date).toISOString().slice(0, 10) : '' %>"></label>
+      <label>Age <small class="muted">(if no date of birth)</small> <input name="age" type="number" min="1" max="119" value="<%= player.age || '' %>"></label>
       <label>Email <input name="email" type="email" value="<%= player.email || '' %>" maxlength="200"></label>
     </div>
     <label>Notes <textarea name="notes" rows="2" maxlength="2000"><%= player.notes || '' %></textarea></label>

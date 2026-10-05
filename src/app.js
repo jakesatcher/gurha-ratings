@@ -79,6 +79,15 @@ function createApp() {
     res.locals.csrfToken = '';
     res.locals.flash = [];
     res.locals.fmt = (n, d = 2) => (n === null || n === undefined ? '—' : Number(n).toFixed(d));
+    // Age from date of birth when known, otherwise the manually entered age.
+    res.locals.ageOf = (p) => {
+      if (!p || !p.birth_date) return p && p.age ? p.age : null;
+      const b = new Date(p.birth_date);
+      const now = new Date();
+      let age = now.getUTCFullYear() - b.getUTCFullYear();
+      if (now.getUTCMonth() < b.getUTCMonth() || (now.getUTCMonth() === b.getUTCMonth() && now.getUTCDate() < b.getUTCDate())) age--;
+      return age;
+    };
     res.locals.fmtDate = (d) => (d ? new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : '');
     next();
   });

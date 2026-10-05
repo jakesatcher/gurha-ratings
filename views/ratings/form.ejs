@@ -14,7 +14,7 @@
   <h1><%= isEdit ? 'Edit rating' : 'Player rating form' %></h1>
   <p class="muted small">Season: <strong><%= isEdit ? rating.season_name : season.name %></strong></p>
   <p class="hero-player"><strong><%= player.first_name %> <%= player.last_name %></strong>
-    <span class="muted"><%= [player.jersey_number ? `#${player.jersey_number}` : null, player.team, player.division, posName[player.position], player.age ? `Age ${player.age}` : null].filter(Boolean).join(' · ') %></span></p>
+    <span class="muted"><%= [player.jersey_number ? `#${player.jersey_number}` : null, player.team, player.division, posName[player.position], ageOf(player) ? `Age ${ageOf(player)}` : null].filter(Boolean).join(' · ') %></span></p>
   <% if (isEdit) { %>
     <div class="alert alert-info">You are editing <strong><%= rating.rater_name %></strong>'s rating as an admin. Changes are recorded in the audit log.</div>
   <% } %>

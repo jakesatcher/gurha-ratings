@@ -1,7 +1,10 @@
 'use strict';
 
-const { Pool } = require('pg');
+const { Pool, types } = require('pg');
 const config = require('../config');
+
+// Return DATE columns as 'YYYY-MM-DD' strings instead of local-midnight Date objects.
+types.setTypeParser(1082, (v) => v);
 
 const pool = new Pool({
   connectionString: config.databaseUrl,

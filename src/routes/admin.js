@@ -10,7 +10,8 @@ const sportsengine = require('../lib/sportsengine');
 const { requireAdmin } = require('../middleware/auth');
 const { verifyCsrf } = require('../middleware/security');
 const { audit } = require('../lib/audit');
-const { parseUpload, upsertPlayers, normalizePosition } = require('../lib/players');
+const { parseUpload, upsertPlayers, normalizePosition, parseDate } = require('../lib/players');
+const { parseSportsEngineExport } = require('../lib/seExport');
 const { isLevel } = require('../lib/levels');
 const R = require('../lib/ratings');
 const roster = require('../lib/roster');
@@ -183,6 +184,7 @@ function playerFromBody(body) {
     first_name: String(body.first_name || '').trim().slice(0, 100),
     last_name: String(body.last_name || '').trim().slice(0, 100),
     age: Number.isInteger(age) && age > 0 && age < 120 ? age : null,
+    birth_date: parseDate(String(body.birth_date || '').trim()),
     email: String(body.email || '').trim().slice(0, 200) || null,
     notes: String(body.notes || '').trim().slice(0, 2000) || null,
     active: body.active === undefined ? true : body.active === 'on' || body.active === 'true',
@@ -199,7 +201,7 @@ function entryFromBody(body) {
   };
 }
 
-const PLAYER_COLS = ['first_name', 'last_name', 'age', 'email', 'notes', 'active'];
+const PLAYER_COLS = ['first_name', 'last_name', 'age', 'birth_date', 'email', 'notes', 'active'];
 
 // Writes a player's roster entry for the season exactly as entered (blank clears a value).
 async function saveEntry(client, seasonId, playerId, e) {
@@ -334,6 +336,120 @@ router.post('/import', upload.single('file'), verifyCsrf, async (req, res) => {
   const result = await db.tx((c) => upsertPlayers(rows, 'import', req.season.id, c));
   await audit(req.user.id, 'players_imported', 'season', req.season.id, { created: result.created, updated: result.updated, skipped: result.skipped });
   res.render('admin/import', { title: 'Import players', result, seConfigured: sportsengine.isConfigured() });
+});
+
+// ---------- SportsEngine roster export (.xls) ----------
+// Upload → review (pick teams and the target season) → import. The parsed file is held in the
+// session between steps (it never touches disk) and cleared once imported or cancelled.
+
+const SE_EXPORT_TTL_MS = 60 * 60 * 1000;
+
+function pendingExport(req) {
+  const p = req.session.seExport;
+  if (!p || Date.now() - p.at > SE_EXPORT_TTL_MS) {
+    delete req.session.seExport;
+    return null;
+  }
+  return p;
+}
+
+router.post('/import/sportsengine', upload.single('file'), verifyCsrf, async (req, res) => {
+  if (!req.file) {
+    req.flash('error', 'Choose the SportsEngine .xls export to upload.');
+    return res.redirect('/admin/import');
+  }
+  try {
+    const parsed = parseSportsEngineExport(req.file.buffer);
+    req.session.seExport = { filename: String(req.file.originalname || 'export.xls').slice(0, 200), at: Date.now(), parsed };
+  } catch (err) {
+    req.flash('error', `Could not read the SportsEngine export: ${err.message}`);
+    return res.redirect('/admin/import');
+  }
+  res.redirect('/admin/import/sportsengine');
+});
+
+router.get('/import/sportsengine', async (req, res) => {
+  const pending = pendingExport(req);
+  if (!pending) {
+    req.flash('info', 'Upload a SportsEngine export to start.');
+    return res.redirect('/admin/import');
+  }
+  const localSeasons = await roster.listSeasons();
+  const suggested = pending.parsed.suggestedSeasonName;
+  const match = localSeasons.find((s) => suggested && s.name.toLowerCase() === suggested.toLowerCase()) || null;
+  res.render('admin/se-export', { title: 'Review SportsEngine export', pending, localSeasons, match, result: null });
+});
+
+router.post('/import/sportsengine/confirm', async (req, res) => {
+  const pending = pendingExport(req);
+  if (!pending) {
+    req.flash('error', 'That upload expired. Please upload the file again.');
+    return res.redirect('/admin/import');
+  }
+  const picked = new Set([].concat(req.body.sheets || []).map(Number));
+  const teams = pending.parsed.teams.filter((t, i) => picked.has(i));
+  if (!teams.length) {
+    req.flash('error', 'Select at least one team to import.');
+    return res.redirect('/admin/import/sportsengine');
+  }
+
+  let season;
+  if (req.body.target === 'new') {
+    const name = String(req.body.new_season_name || '').trim().slice(0, 100);
+    if (!name) {
+      req.flash('error', 'Enter a name for the new season.');
+      return res.redirect('/admin/import/sportsengine');
+    }
+    if (await db.one('SELECT 1 FROM seasons WHERE lower(name) = lower($1)', [name])) {
+      req.flash('error', `A season named "${name}" already exists. Choose it from the list instead.`);
+      return res.redirect('/admin/import/sportsengine');
+    }
+  } else {
+    season = await db.one('SELECT * FROM seasons WHERE id = $1', [Number(req.body.target) || 0]);
+    if (!season) {
+      req.flash('error', 'Choose a season to import into.');
+      return res.redirect('/admin/import/sportsengine');
+    }
+  }
+
+  const result = await db.tx(async (c) => {
+    if (!season) {
+      season = (await c.query('INSERT INTO seasons (name) VALUES ($1) RETURNING *', [String(req.body.new_season_name).trim().slice(0, 100)])).rows[0];
+      if (req.body.make_current === 'on') {
+        await c.query('UPDATE seasons SET is_current = false WHERE is_current');
+        await c.query('UPDATE seasons SET is_current = true WHERE id = $1', [season.id]);
+      }
+      await audit(req.user.id, 'season_created', 'season', season.id, { name: season.name, source: 'sportsengine_export' }, c);
+    }
+    const total = { created: 0, updated: 0, skipped: 0, errors: [] };
+    for (const t of teams) {
+      await roster.findOrCreateTeam(c, season.id, { name: t.team, division: t.division, external_id: t.team_external_id });
+      const rows = t.players.map((p) => ({ ...p, team: t.team, division: t.division, team_external_id: t.team_external_id }));
+      const r = await upsertPlayers(rows, 'sportsengine', season.id, c);
+      total.created += r.created;
+      total.updated += r.updated;
+      total.skipped += r.skipped;
+      total.errors.push(...r.errors.map((e) => `${t.team}: ${e}`));
+    }
+    await audit(req.user.id, 'sportsengine_export_import', 'season', season.id, {
+      file: pending.filename,
+      teams: teams.map((t) => t.team),
+      created: total.created,
+      updated: total.updated,
+      skipped: total.skipped,
+    }, c);
+    return total;
+  });
+
+  delete req.session.seExport;
+  req.session.seasonId = season.id;
+  res.render('admin/se-export', { title: 'SportsEngine export imported', pending: null, result, importSeason: season, teamCount: teams.length });
+});
+
+router.post('/import/sportsengine/cancel', (req, res) => {
+  delete req.session.seExport;
+  req.flash('info', 'Import cancelled. Nothing was saved.');
+  res.redirect('/admin/import');
 });
 
 router.get('/import/template.csv', (req, res) => {

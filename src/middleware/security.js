@@ -17,7 +17,7 @@ function csrfValid(req) {
 }
 
 // Routes that accept multipart uploads; they call `verifyCsrf` after multer parses the body.
-const MULTIPART_ROUTES = new Set(['/admin/import']);
+const MULTIPART_ROUTES = new Set(['/admin/import', '/admin/import/sportsengine']);
 
 // Global CSRF check.
 function csrf(req, res, next) {

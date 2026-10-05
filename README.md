@@ -75,6 +75,23 @@ Set `SPORTSENGINE_CLIENT_ID`, `SPORTSENGINE_CLIENT_SECRET` and `SPORTSENGINE_ORG
 
 The integration authenticates with OAuth client credentials. It reads the GraphQL schema (introspection) and builds every query from the fields your access actually exposes. Teams are filtered to a season by a season argument if `teams` has one, by a season field on the team, or through divisions. Rosters are fetched per team with `team(id)` when available. **Admin → SportsEngine → Diagnostics** runs a dry run that shows the generated query and the raw response. If introspection is disabled for your account, set `SPORTSENGINE_ROSTER_QUERY`.
 
+## SportsEngine roster export (.xls)
+
+**Admin → Import → SportsEngine roster export** takes the workbook SportsEngine exports: one sheet per team. Each sheet has `League`, `Division`, `Season` and `Team` rows (the team row includes the SportsEngine team ID), then a header row: `SportNgin ID`, `Jersey #`, `First Name`, `Last Name`, `Position`, `Date of Birth`, `Gender`, `Height`, `Weight`, `Shoots`, `Grad Year`, `High School`, `ACT`, `SAT`, `GPA`.
+
+| Export column / row | Stored as |
+|---|---|
+| `Team` row (name + ID) | Team in the chosen season, linked by SportsEngine team ID |
+| `Division` row (`C1B2 DIVISION`) | Team division (`C1B2`) |
+| `Season` row | Suggested season name (the last value, e.g. `FALL SEASON 2026`) |
+| `SportNgin ID` | Player's SportsEngine ID (used to match players across seasons) |
+| `Jersey #`, `Position` | The player's roster entry for the season (a blank value doesn't erase an existing one) |
+| `First Name`, `Last Name` | Player name |
+| `Date of Birth` | Player's date of birth. Raters only see the age calculated from it |
+| Gender, Height, Weight, Shoots, school/test columns | Ignored |
+
+After upload you review the teams (grouped by division, with rows that need attention flagged). Then you pick which teams to import and the season to import into, either a new season or an existing one. Nothing is saved until you confirm, and the upload is discarded afterwards. Columns are found by name, so reordered or extra columns are fine. Only the Excel 97–2003 `.xls` format is supported.
+
 ## Import format
 
 Files are imported into the season selected at the top of the page. Use CSV or JSON with any of these columns: `first_name`, `last_name` (or one `name` column), `jersey_number`, `team`, `division`, `position` (F/D/G or Forward/Defense/Goalie), `age`, `email`, `external_id`, `notes`. Download a template from Admin → Import.

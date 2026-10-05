@@ -1,7 +1,7 @@
 <%- include('../partials/head') %>
 <h1>Import players</h1>
 <%- include('_nav') %>
-<div class="alert alert-info">Importing into <strong><%= season.name %></strong>. Change the season with the selector at the top, or <a href="/admin/seasons">create a new season</a>.</div>
+<div class="alert alert-info">CSV / JSON uploads go into <strong><%= season.name %></strong> (change it with the season selector at the top). SportsEngine exports let you pick the season during review.</div>
 
 <% if (result) { %>
   <div class="alert alert-success" role="status">
@@ -10,6 +10,20 @@
     <p><a href="/admin/players">View players</a></p>
   </div>
 <% } %>
+
+<section class="card">
+  <h2>SportsEngine roster export (.xls)</h2>
+  <p>Upload the roster workbook exported from SportsEngine (one sheet per team). You'll review the teams and choose a season before anything is saved.</p>
+  <form method="post" action="/admin/import/sportsengine" enctype="multipart/form-data" class="inline-form">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <input type="file" name="file" accept=".xls,application/vnd.ms-excel" required aria-label="SportsEngine export file">
+    <button class="btn btn-primary" type="submit">Upload &amp; review</button>
+  </form>
+  <details class="small">
+    <summary>Expected format</summary>
+    <p>Each sheet starts with <code>League</code>, <code>Division</code>, <code>Season</code> and <code>Team</code> rows (the team row includes the SportsEngine team ID), then a header row: <code>SportNgin ID</code>, <code>Jersey #</code>, <code>First Name</code>, <code>Last Name</code>, <code>Position</code>, <code>Date of Birth</code>, … Gender, height, weight and school columns are ignored.</p>
+  </details>
+</section>
 
 <div class="grid-2">
   <section class="card">
