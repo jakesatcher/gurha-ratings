@@ -6,7 +6,7 @@
         <% set.forEach(function (a, i) { %><img src="/static/ads/<%= a.key %>.svg" alt="<%= i < ads.SPONSORS.length ? a.alt : '' %>" width="240" height="60" loading="lazy" <%= i >= ads.SPONSORS.length ? 'aria-hidden=true' : '' %>><% }) %>
       </div>
     </div>
-  <% } else { const a = slot === 'footer' ? ads.SPONSORS[0] : ads.pick(); %>
+  <% } else { const a = ads.pick(); %>
     <figure class="ad ad-<%= slot %>">
       <img src="/static/ads/<%= a.key %>.svg" alt="<%= a.alt %>" width="400" height="100" loading="lazy">
       <figcaption>Sponsor</figcaption>

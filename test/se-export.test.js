@@ -123,7 +123,8 @@ test('upload → review → import into a new season, then re-import updates in 
   assert.match(teamPage.text, /#23/, 'team-specific jersey number');
   assert.strictEqual((await admin.get('/leagues/NOPE')).status, 404);
   // Sponsors
-  assert.match(leagues.text, /\/static\/ads\/robert-sucks\.svg/);
+  assert.match(leagues.text, /\/static\/ads\/five-hole-pizza\.svg/);
+  assert.doesNotMatch(leagues.text, /robert-sucks/i);
 
   // Player page shows age derived from date of birth
   const p = await h.db.one(`SELECT ${h.byExt('se:80000002')} AS id`);

@@ -2,7 +2,6 @@
 
 // Rink-board "sponsors". All fictional, for fun. Set ADS_ENABLED=false to hide them everywhere.
 const SPONSORS = [
-  { key: 'robert-sucks', name: 'Robert Sucks', alt: 'Robert Sucks: official sponsor of missed open nets', featured: true },
   { key: 'five-hole-pizza', name: 'Five Hole Pizza', alt: 'Five Hole Pizza: always finds a way through' },
   { key: 'sin-bin-tavern', name: 'Sin Bin Tavern', alt: 'Sin Bin Tavern: serving two minutes at a time' },
   { key: 'top-shelf-taproom', name: 'Top Shelf Taproom', alt: 'Top Shelf Taproom: where mama keeps the good stuff' },
@@ -13,11 +12,9 @@ const SPONSORS = [
 
 const enabled = !['0', 'false', 'no', 'off'].includes(String(process.env.ADS_ENABLED || 'true').toLowerCase());
 
-// Picks a sponsor for a single slot; the featured sponsor shows up about half the time.
+// Picks a sponsor for a single slot.
 function pick() {
-  if (Math.random() < 0.5) return SPONSORS.find((s) => s.featured);
-  const others = SPONSORS.filter((s) => !s.featured);
-  return others[Math.floor(Math.random() * others.length)];
+  return SPONSORS[Math.floor(Math.random() * SPONSORS.length)];
 }
 
 module.exports = { SPONSORS, enabled, pick };
