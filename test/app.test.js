@@ -180,6 +180,12 @@ test('CSV and JSON import create and update players', async () => {
   assert.strictEqual(jane.jersey_number, '17');
   assert.strictEqual(jane.position, 'D');
 
+  // SportsEngine diagnostics page renders and reports missing configuration
+  assert.strictEqual((await agent.get('/admin/sportsengine')).status, 200);
+  const diag = await h.post(agent, '/admin/sportsengine/diagnose', {}, '/admin/sportsengine');
+  assert.strictEqual(diag.status, 200);
+  assert.match(diag.text, /not configured/);
+
   // Multipart without CSRF is rejected, on the upload route and elsewhere
   const noCsrf = await agent.post('/admin/import').attach('file', Buffer.from(csv), 'roster.csv');
   assert.strictEqual(noCsrf.status, 403);

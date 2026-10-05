@@ -247,15 +247,43 @@ router.post('/import', upload.single('file'), verifyCsrf, async (req, res) => {
 router.post('/sportsengine/sync', async (req, res) => {
   try {
     const rows = await sportsengine.fetchRoster();
-    if (!rows.length) throw new Error('No players were found in the SportsEngine response. Check the org/season IDs and query.');
+    if (!rows.length) throw new Error('No players were found in the SportsEngine response.');
     const result = await db.tx((c) => upsertPlayers(rows, 'sportsengine', c));
     await audit(req.user.id, 'sportsengine_sync', 'player', null, { created: result.created, updated: result.updated, skipped: result.skipped });
     res.render('admin/import', { title: 'Import players', result, seConfigured: true });
   } catch (err) {
     console.error(err);
-    req.flash('error', err.message);
+    req.flash('error', `${err.message} — open SportsEngine diagnostics for details.`);
     res.redirect('/admin/import');
   }
+});
+
+// Dry run: shows what the API returns and which players would be imported, without saving anything.
+router.get('/sportsengine', (req, res) => {
+  res.render('admin/sportsengine', { title: 'SportsEngine diagnostics', seConfigured: sportsengine.isConfigured(), report: null });
+});
+
+router.post('/sportsengine/diagnose', async (req, res) => {
+  const diagnostics = {};
+  let players = [];
+  let error = null;
+  try {
+    players = await sportsengine.fetchRoster({ diagnostics });
+  } catch (err) {
+    error = err.message;
+  }
+  const sample = diagnostics.sample === undefined ? null : JSON.stringify(diagnostics.sample, null, 2);
+  res.render('admin/sportsengine', {
+    title: 'SportsEngine diagnostics',
+    seConfigured: sportsengine.isConfigured(),
+    report: {
+      error,
+      diagnostics,
+      players: players.slice(0, 25),
+      total: players.length,
+      sample: sample && sample.length > 20000 ? `${sample.slice(0, 20000)}\n… (truncated)` : sample,
+    },
+  });
 });
 
 router.get('/import/template.csv', (req, res) => {

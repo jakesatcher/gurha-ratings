@@ -63,7 +63,11 @@ Until email is configured, codes are printed to the server log. That is fine for
 
 Set `SPORTSENGINE_CLIENT_ID`, `SPORTSENGINE_CLIENT_SECRET` and `SPORTSENGINE_ORG_ID` (optionally `SPORTSENGINE_SEASON_ID`). A **Sync from SportsEngine** button then appears under Admin → Import.
 
-The integration uses OAuth client credentials and a GraphQL roster query. API access, endpoints and schema depend on what SportsEngine grants your organization, so the token URL, GraphQL URL and query can all be overridden with env vars. The sync collects any player records (first/last name, jersey, position, team) wherever they appear in the response. It matches existing players by SportsEngine ID, then by name + team, and never deletes anyone.
+The integration authenticates with OAuth client credentials. It then reads the GraphQL schema (introspection) and builds the roster query from the fields your API access actually exposes, so field-name differences don't break it. Arguments the schema doesn't accept are skipped; for example, `SPORTSENGINE_SEASON_ID` is ignored if `teams` has no season argument. Pages are followed automatically, and division names are resolved from `divisionId` when a `divisions` query exists.
+
+**Admin → SportsEngine** runs a dry run. It shows the generated query, the raw response and the players that would be imported, and saves nothing. If introspection is disabled for your account, set `SPORTSENGINE_ROSTER_QUERY` to a query from SportsEngine's docs.
+
+Existing players are matched by SportsEngine ID, then by name + team. Nobody is deleted.
 
 ## Import format
 

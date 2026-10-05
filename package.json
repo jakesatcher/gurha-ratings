@@ -29,6 +29,7 @@
     "qrcode": "^1.5.4"
   },
   "devDependencies": {
+    "graphql": "^17.0.2",
     "supertest": "^7.3.1"
   }
 }

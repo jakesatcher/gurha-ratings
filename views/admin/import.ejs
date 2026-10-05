@@ -35,6 +35,7 @@
         <input type="hidden" name="_csrf" value="<%= csrfToken %>">
         <button class="btn btn-primary" type="submit">Sync from SportsEngine</button>
       </form>
+      <p class="small"><a href="/admin/sportsengine">Diagnostics (dry run)</a></p>
     <% } else { %>
       <p class="muted">Not configured. Set <code>SPORTSENGINE_CLIENT_ID</code>, <code>SPORTSENGINE_CLIENT_SECRET</code> and <code>SPORTSENGINE_ORG_ID</code> in Railway to enable roster sync.</p>
     <% } %>
