@@ -13,19 +13,36 @@
 const config = require('../config');
 
 const PER_PAGE = 100;
-const MAX_PAGES = 50;
+const MAX_PAGES = 200;
 const SCHEMA_TTL_MS = 10 * 60 * 1000;
 
-// Object fields worth following when building selection sets, per purpose.
-const WRAPPERS = 'results|nodes|edges|node|items|data';
+// SportsEngine rejects queries above a complexity budget (101 at the time of writing). Complexity grows
+// with page size × nested objects, so we select only the fields we use, size pages to fit, and if the
+// API still says "too complex" we shrink the page using the numbers in its error and retry.
+const MAX_COMPLEXITY = Number(process.env.SPORTSENGINE_MAX_COMPLEXITY) || 101;
+
+// Object fields followed when building selection sets, per purpose (exact names, case-insensitive).
+const WRAPPERS = ['results', 'nodes', 'edges', 'node', 'items', 'data'];
+const names = (list) => new RegExp(`^(${list.join('|')})$`, 'i');
 const RELEVANCE = {
-  roster: new RegExp(`${WRAPPERS}|roster|player|member|athlete|person|persona|profile|user|division|contact|jersey|position`, 'i'),
-  teams: new RegExp(`${WRAPPERS}|division|season|program|league`, 'i'),
-  plain: new RegExp(WRAPPERS, 'i'),
+  roster: names([...WRAPPERS, 'players', 'roster', 'rosterPlayers', 'members', 'athletes', 'profile', 'persona', 'person', 'division', 'position']),
+  teams: names([...WRAPPERS, 'division', 'season', 'program', 'league']),
+  plain: names(WRAPPERS),
 };
-// Object fields never followed (avoid huge or irrelevant graphs).
-const SKIP_FIELD = /^(organization|org|parent|children|games|events|schedule|standings|staff|coaches|invoices|payments|registrations?)$/i;
-const SKIP_FOR_TEAMS = /roster|player|member|athlete|person|persona|user/i;
+// Only these scalar fields are requested (everything else costs complexity and isn't used).
+const WANTED_SCALARS = names([
+  'id', 'name', 'title', 'abbreviation',
+  'divisionId', 'division_id', 'divisionName', 'seasonId', 'season_id',
+  'startDate', 'start_date', 'endDate', 'end_date', 'startsAt', 'endsAt',
+  'firstName', 'first_name', 'lastName', 'last_name', 'givenName', 'familyName', 'preferredFirstName',
+  'jerseyNumber', 'jersey_number', 'jersey', 'number', 'uniformNumber',
+  'position', 'positionName', 'abbreviation',
+  'dateOfBirth', 'date_of_birth', 'birthDate', 'birthdate',
+  'sportsEngineId', 'profileId', 'personaId', 'userId',
+]);
+// Object fields never followed.
+const SKIP_FIELD = /^(organization|org|parent|children|games|events|schedule|standings|staff|coaches|invoices|payments|registrations?|memberships|registrationResults|verifiedProfile|statistics)$/i;
+const SKIP_FOR_TEAMS = /^(players|roster|rosterPlayers|members|athletes|profile|persona|person)$/i;
 
 const ARG = {
   organization: /^(organizationId|organization_id|orgId|org_id)$/,
@@ -141,7 +158,7 @@ function buildSelection(types, typeName, depth, { relevance = RELEVANCE.roster, 
     if (f.name.startsWith('__') || f.args.some(isRequired)) continue;
     const u = unwrap(f.type);
     if (u.kind === 'SCALAR' || u.kind === 'ENUM') {
-      parts.push(f.name);
+      if (WANTED_SCALARS.test(f.name)) parts.push(f.name);
     } else if (
       (u.kind === 'OBJECT' || u.kind === 'INTERFACE') &&
       depth > 0 &&
@@ -151,7 +168,7 @@ function buildSelection(types, typeName, depth, { relevance = RELEVANCE.roster, 
       !seen.includes(u.name)
     ) {
       const sub = buildSelection(types, u.name, depth - 1, { relevance, skip, seen: [...seen, u.name] });
-      if (sub) parts.push(`${f.name} { ${sub} }`);
+      if (sub && sub !== '__typename') parts.push(`${f.name} { ${sub} }`);
     }
   }
   return parts.join(' ');
@@ -163,8 +180,23 @@ function literal(value, typeRef) {
   return u.list ? `[${one(value)}]` : one(value);
 }
 
+// Number of nested object selections, which drives the API's complexity score.
+const objectCount = (selection) => (selection.match(/\{/g) || []).length;
+
+// A page size expected to fit the complexity budget. Observed: complexity = 1 + perPage × (nested objects),
+// e.g. 701 = 1 + 100 × 7 for a selection with 7 nested objects.
+function fittingPageSize(selection) {
+  return Math.max(1, Math.min(PER_PAGE, Math.floor((MAX_COMPLEXITY - 1) / Math.max(1, objectCount(selection)))));
+}
+
+// "Query is too complex: 701. Maximum allowed complexity: 101" → { actual: 701, max: 101 }
+function complexityError(err) {
+  const m = /too complex:\s*(\d+)\D+?(\d+)/i.exec(String(err && err.message));
+  return m ? { actual: Number(m[1]), max: Number(m[2]) } : null;
+}
+
 // Builds the argument list for a query field. Returns null if a required argument can't be filled.
-function buildArgs(field, { page = 1, seasonId = null, id = null } = {}) {
+function buildArgs(field, { page = 1, seasonId = null, id = null, perPage = PER_PAGE } = {}) {
   const args = [];
   let paged = false;
   let usedSeason = false;
@@ -177,7 +209,7 @@ function buildArgs(field, { page = 1, seasonId = null, id = null } = {}) {
     } else if (ARG.page.test(a.name)) {
       value = page;
       paged = true;
-    } else if (ARG.perPage.test(a.name)) value = PER_PAGE;
+    } else if (ARG.perPage.test(a.name)) value = perPage;
     else if (id !== null && ARG.id.test(a.name)) value = id;
     if (value !== null && value !== undefined && value !== '') args.push(`${a.name}: ${literal(value, a.type)}`);
     else if (isRequired(a)) return null;
@@ -195,18 +227,38 @@ function findQuery(schema, names) {
 
 const supportsArg = (field, re) => field.args.some((a) => re.test(a.name));
 
-// Runs a (possibly paged) list query, returning every page's data until a page adds nothing new.
+// Runs a (possibly paged) list query, returning every page's data. Stops on a short or empty page.
 async function fetchAllPages(field, selection, opts, itemsOf, log) {
   const pages = [];
   const seen = new Set();
-  for (let page = 1; page <= MAX_PAGES; page++) {
-    const args = buildArgs(field, { ...opts, page });
+  const pageSized = supportsArg(field, ARG.perPage);
+  let perPage = pageSized ? fittingPageSize(selection) : PER_PAGE;
+  let offset = 0; // items already fetched, so the page number can be recomputed if the page size shrinks
+  for (let n = 0; n < MAX_PAGES; n++) {
+    const page = Math.floor(offset / perPage) + 1;
+    const args = buildArgs(field, { ...opts, page, perPage });
     if (!args) throw new Error(`SportsEngine "${field.name}" needs arguments this app can't fill: ${field.args.filter(isRequired).map((a) => a.name).join(', ')}`);
     const query = `query { ${field.name}${args.text} { ${selection} } }`;
-    if (log && page === 1) log.query = query;
-    const { data, warnings } = await gqlOrThrow(query);
+    let data;
+    let warnings;
+    try {
+      ({ data, warnings } = await gqlOrThrow(query));
+    } catch (err) {
+      const c = complexityError(err);
+      if (c && pageSized && perPage > 1) {
+        // Shrink the page in proportion to how far over budget we were, and retry the same items.
+        perPage = Math.max(1, Math.min(perPage - 1, Math.floor((perPage * (c.max - 1)) / Math.max(1, c.actual - 1))));
+        if (log) log.pageSize = perPage;
+        n--;
+        continue;
+      }
+      if (c) throw new Error(`${err.message}. The "${field.name}" query can't be made smaller; set SPORTSENGINE_ROSTER_QUERY to a simpler query.`);
+      throw err;
+    }
+    if (log && !log.query) log.query = query;
     if (log && warnings) log.warnings = warnings;
-    if (log && page === 1) log.sample = data;
+    if (log && !log.sample) log.sample = data;
+    if (log) log.pageSize = perPage;
     const items = itemsOf(data);
     const fresh = items.filter((i) => {
       const key = i.id !== undefined ? String(i.id) : JSON.stringify(i);
@@ -215,8 +267,9 @@ async function fetchAllPages(field, selection, opts, itemsOf, log) {
       return true;
     });
     pages.push(data);
-    if (log) log.pages = page;
-    if (!args.paged || fresh.length === 0) break;
+    offset += perPage;
+    if (log) log.pages = pages.length;
+    if (!args.paged || fresh.length === 0 || (pageSized && items.length < perPage)) break;
   }
   return pages;
 }
@@ -341,6 +394,8 @@ const LAST_KEYS = ['lastName', 'last_name', 'familyName', 'family_name', 'surnam
 const JERSEY_KEYS = ['jerseyNumber', 'jersey_number', 'jersey', 'number', 'uniformNumber'];
 const POSITION_KEYS = ['position', 'positionName', 'position_name', 'primaryPosition'];
 const EMAIL_KEYS = ['email', 'emailAddress', 'email_address'];
+const DOB_KEYS = ['dateOfBirth', 'date_of_birth', 'birthDate', 'birthdate'];
+const PROFILE_KEYS = ['profile', 'persona', 'person', 'user'];
 const isPerson = (o) => o && typeof o === 'object' && !Array.isArray(o) && first(o, FIRST_KEYS) && first(o, LAST_KEYS);
 const positionText = (p) => (p && typeof p === 'object' ? p.name || p.abbreviation || null : p);
 
@@ -352,18 +407,29 @@ function extractPlayers(node, ctx = {}, out = [], divisionNames = new Map()) {
   }
   if (!node || typeof node !== 'object') return out;
 
-  // A roster entry may hold the person in a nested object (e.g. { jerseyNumber, persona: { firstName } }).
+  // A roster entry may hold the person in a nested object (e.g. { jerseyNumber, persona: { firstName } }),
+  // or carry names itself with extra details in a profile ({ firstName, profile: { dateOfBirth, sportsEngineId } }).
   const personChild = isPerson(node) ? null : Object.values(node).find(isPerson);
   const person = isPerson(node) ? node : personChild;
   if (person) {
-    const id = person.id ?? node.id;
+    const profile = PROFILE_KEYS.map((k) => person[k] || node[k]).find((v) => v && typeof v === 'object' && !Array.isArray(v)) || {};
+    const pick = (keys) => first(person, keys) ?? first(node, keys) ?? first(profile, keys);
+    const rosterId = node.id ?? person.id;
+    // Registration-level ID (changes per registration) plus person-level IDs (stable across registrations).
+    const extraIds = [];
+    const profileId = profile.id ?? first(person, ['profileId', 'personaId']) ?? first(node, ['profileId', 'personaId']);
+    if (profileId !== null && profileId !== undefined) extraIds.push(`se-profile:${profileId}`);
+    const seId = first(profile, ['sportsEngineId']) ?? first(person, ['sportsEngineId']);
+    if (seId !== null && seId !== undefined) extraIds.push(`se-person:${seId}`);
     out.push({
-      first_name: String(first(person, FIRST_KEYS)),
-      last_name: String(first(person, LAST_KEYS)),
-      jersey_number: first(node, JERSEY_KEYS) ?? first(person, JERSEY_KEYS),
-      position: positionText(first(node, POSITION_KEYS) ?? first(person, POSITION_KEYS)),
-      email: first(person, EMAIL_KEYS) ?? first(node, EMAIL_KEYS),
-      external_id: id !== undefined && id !== null ? `se:${id}` : null,
+      first_name: String(first(person, FIRST_KEYS) ?? first(profile, FIRST_KEYS)),
+      last_name: String(first(person, LAST_KEYS) ?? first(profile, LAST_KEYS)),
+      jersey_number: pick(JERSEY_KEYS),
+      position: positionText(pick(POSITION_KEYS)),
+      email: pick(EMAIL_KEYS),
+      birth_date: pick(DOB_KEYS),
+      external_id: rosterId !== undefined && rosterId !== null ? `se:${rosterId}` : null,
+      extra_ids: extraIds,
       team: ctx.team || null,
       team_external_id: ctx.teamId ? `se:${ctx.teamId}` : null,
       division: ctx.division || null,

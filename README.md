@@ -73,6 +73,8 @@ Set `SPORTSENGINE_CLIENT_ID`, `SPORTSENGINE_CLIENT_SECRET` and `SPORTSENGINE_ORG
 2. **Tick the teams to import**, and choose the GURHA season they go into. That can be an existing season, or a new one named and dated from SportsEngine.
 3. **Import.** Teams and roster entries are created in that season. Players are matched to existing GURHA players (by SportsEngine ID, then name), so history carries across seasons. Nobody is deleted, and re-importing updates the roster in place.
 
+SportsEngine rejects queries over a complexity budget (101; roughly 1 + page size × nested objects). The app only requests the fields it uses: team ID/name/division, and player name, jersey, position, profile ID, date of birth and SportsEngine ID. It sizes pages to fit the budget, and if the API still reports "Query is too complex", it shrinks the page and retries. A player's profile ID and SportsEngine ID are stored as person-level IDs alongside the roster entry's registration ID, so the same person is recognised across registrations and seasons. Override the budget with `SPORTSENGINE_MAX_COMPLEXITY` if SportsEngine changes it.
+
 The integration authenticates with OAuth client credentials. It reads the GraphQL schema (introspection) and builds every query from the fields your access actually exposes. Teams are filtered to a season by a season argument if `teams` has one, by a season field on the team, or through divisions. Rosters are fetched per team with `team(id)` when available. **Admin → SportsEngine → Diagnostics** runs a dry run that shows the generated query and the raw response. If introspection is disabled for your account, set `SPORTSENGINE_ROSTER_QUERY`.
 
 ## Players, registrations and duplicates

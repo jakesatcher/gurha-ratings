@@ -83,8 +83,15 @@ const q = async (client, sql, params) => (await client.query(sql, params)).rows;
 // Finds the existing person for an incoming record. Returns { player, how, ambiguous }.
 // `p` has first_name, last_name, and optionally external_id, birth_date, email, team (name), seasonId.
 async function matchPlayer(client, p) {
-  if (p.external_id) {
-    const [row] = await q(client, 'SELECT pl.* FROM player_external_ids x JOIN players pl ON pl.id = x.player_id WHERE x.external_id = $1', [p.external_id]);
+  // Person-level IDs (stable across registrations) first, then the registration ID.
+  const ids = [...(p.extra_ids || []), p.external_id].filter(Boolean);
+  if (ids.length) {
+    const [row] = await q(
+      client,
+      `SELECT pl.* FROM player_external_ids x JOIN players pl ON pl.id = x.player_id
+        WHERE x.external_id = ANY($1::text[]) ORDER BY array_position($1::text[], x.external_id) LIMIT 1`,
+      [ids]
+    );
     if (row) return { player: row, how: 'registration ID', ambiguous: [] };
   }
   const key = nameKey(p.first_name, p.last_name);

@@ -53,7 +53,7 @@ test('summary flags third review when levels differ by 2+', () => {
 test('import normalizes common column names and formats', () => {
   assert.deepStrictEqual(
     { ...normalizePlayer({ 'Player Name': 'Gretzky, Wayne', 'Jersey #': '#99', Pos: 'Center', League: 'A' }) },
-    { first_name: 'Wayne', last_name: 'Gretzky', jersey_number: '99', team: null, division: 'A', position: 'F', age: null, email: null, external_id: null, team_external_id: null, birth_date: null, is_sub: false, notes: null }
+    { first_name: 'Wayne', last_name: 'Gretzky', jersey_number: '99', team: null, division: 'A', position: 'F', age: null, email: null, external_id: null, team_external_id: null, birth_date: null, is_sub: false, extra_ids: [], notes: null }
   );
   assert.ok(normalizePlayer({ team: 'x' }).error);
   const rows = parseUpload(Buffer.from('﻿First Name,Last Name,Team\nA,B,C\n'), 'x.csv');

@@ -96,6 +96,8 @@ function normalizePlayer(raw) {
     team_external_id: pickField(row, 'team_external_id'),
     birth_date: parseDate(pickField(row, 'birth_date')),
     is_sub: clean.isSub || (subRaw !== null && ['1', 'true', 'yes', 'y', 'sub', 'x'].includes(subRaw.toLowerCase())),
+    // Additional person-level IDs (e.g. SportsEngine profile IDs) from API imports.
+    extra_ids: Array.isArray(raw.extra_ids) ? raw.extra_ids.filter(Boolean).map(String) : [],
     notes: pickField(row, 'notes'),
   };
 }
@@ -152,7 +154,7 @@ async function upsertPlayers(rawRows, source, seasonId, client = db, { seen } = 
       if (match.ambiguous.length) result.ambiguous.push({ row: i + 1, name: `${p.first_name} ${p.last_name}`, player_id: player.id });
     }
     seenThisImport.add(player.id);
-    await linkExternalId(client, player.id, p.external_id, source);
+    for (const id of [p.external_id, ...p.extra_ids]) await linkExternalId(client, player.id, id, source);
     const team = await findOrCreateTeam(client, seasonId, { name: p.team, division: p.division, external_id: p.team_external_id });
     const spId = await ensureSeasonPlayer(client, seasonId, player.id, source);
     await upsertMembership(client, spId, {
