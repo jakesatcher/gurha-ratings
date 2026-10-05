@@ -147,6 +147,19 @@ test('admin email page, test send, alert opt-out and security notices', async ()
   assert.match(alert.body.html, /I play on the Hawks/);
   assert.ok(!resend.requests.some((r) => r.body.to[0] === 'quiet@test.com'), 'opted-out admin not emailed');
 
+  // Asking again with the same email still alerts admins (flagged as a repeat), without changing the account
+  resend.requests.length = 0;
+  const reg2 = await anon.get('/register');
+  const again = await anon.post('/register').type('form').send({
+    _csrf: h.csrfFrom(reg2.text), name: 'Imposter', email: 'NEW@test.com', password: 'differentpass99', password_confirm: 'differentpass99',
+  });
+  assert.match(again.text, /Request submitted/);
+  await until(() => resend.requests.some((r) => r.body.to[0] === 'boss@test.com'));
+  const repeatAlert = resend.requests.find((r) => r.body.to[0] === 'boss@test.com');
+  assert.match(repeatAlert.body.subject, /Access request \(repeat request\): New Person/, 'uses the stored name, not the new form');
+  assert.match(repeatAlert.body.text, /again \(still waiting\)/);
+  assert.strictEqual((await h.db.one(`SELECT name FROM users WHERE email = 'new@test.com'`)).name, 'New Person');
+
   // Approval email
   const newUser = await h.db.one(`SELECT id FROM users WHERE email = 'new@test.com'`);
   await h.post(boss, `/admin/users/${newUser.id}/approve`, {}, '/admin/users');

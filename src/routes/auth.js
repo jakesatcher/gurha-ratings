@@ -66,6 +66,22 @@ async function completeLogin(req, res, user) {
 
 // ---------- Registration (access request) ----------
 
+async function notifyAdminsOfRequest(requester, note, { repeat = false, previousStatus = null } = {}) {
+  const admins = await db.many(`SELECT id, email FROM users WHERE role = 'admin' AND status = 'approved' AND notify_access_requests`);
+  if (!admins.length) {
+    console.warn(`[email] Access request from ${requester.email}, but no approved admin has access-request alerts turned on.`);
+    return;
+  }
+  const { n: pendingCount } = await db.one(`SELECT count(*)::int AS n FROM users WHERE status = 'pending'`);
+  for (const a of admins) {
+    mailer.sendQuietly({
+      to: a.email,
+      userId: a.id,
+      ...emails.accessRequested({ name: requester.name, email: requester.email, note, pendingCount, repeat, previousStatus }),
+    });
+  }
+}
+
 router.get('/register', (req, res) => {
   if (req.user) return res.redirect('/players');
   res.render('auth/register', { title: 'Request access', values: {}, errors: [] });
@@ -85,23 +101,23 @@ router.post('/register', registerLimiter, async (req, res) => {
   if (req.body.password !== req.body.password_confirm) errors.push('Passwords do not match.');
   if (errors.length) return res.status(422).render('auth/register', { title: 'Request access', values, errors });
 
-  const existing = await db.one('SELECT id FROM users WHERE lower(email) = $1', [values.email]);
+  const existing = await db.one('SELECT id, name, email, status, request_note FROM users WHERE lower(email) = $1', [values.email]);
+  let requester = null;
+  let repeat = false;
   if (!existing) {
-    const user = await db.one(
+    requester = await db.one(
       `INSERT INTO users (email, name, password_hash, request_note) VALUES ($1, $2, $3, $4) RETURNING id, name, email`,
       [values.email, values.name, await bcrypt.hash(req.body.password, 12), values.request_note || null]
     );
-    await audit(user.id, 'access_requested', 'user', user.id);
-    const admins = await db.many(`SELECT id, email FROM users WHERE role = 'admin' AND status = 'approved' AND notify_access_requests`);
-    const { n: pendingCount } = await db.one(`SELECT count(*)::int AS n FROM users WHERE status = 'pending'`);
-    for (const a of admins) {
-      mailer.sendQuietly({
-        to: a.email,
-        userId: a.id,
-        ...emails.accessRequested({ name: user.name, email: user.email, note: values.request_note, pendingCount }),
-      });
-    }
+    await audit(requester.id, 'access_requested', 'user', requester.id);
+  } else if (['pending', 'rejected'].includes(existing.status)) {
+    // Someone asking again (still waiting, or previously not approved): nudge the admins.
+    // Nothing about the account changes, and the requester sees the same page as everyone else.
+    requester = existing;
+    repeat = true;
+    await audit(existing.id, 'access_requested_again', 'user', existing.id, { status: existing.status });
   }
+  if (requester) await notifyAdminsOfRequest(requester, values.request_note || requester.request_note, { repeat, previousStatus: existing && existing.status });
   // Same response whether or not the email already exists, to avoid account enumeration.
   res.render('auth/registered', { title: 'Request submitted' });
 });

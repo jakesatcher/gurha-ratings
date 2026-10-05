@@ -61,16 +61,17 @@ function code({ code: c, purpose, minutes }) {
 
 // ---------- Access requests ----------
 
-function accessRequested({ name, email, note, pendingCount }) {
+function accessRequested({ name, email, note, pendingCount, repeat = false, previousStatus = null }) {
+  const again = repeat ? (previousStatus === 'rejected' ? ' again (previously not approved)' : ' again (still waiting)') : '';
   return {
     kind: 'access_requested',
-    subject: `Access request: ${name}`,
-    text: `${name} (${email}) requested rater access.${note ? `\n\n"${note}"` : ''}\n\n${pendingCount} request(s) waiting. Review: ${config.appUrl}/admin/users\n\nTurn these alerts off on your account page.`,
+    subject: `Access request${repeat ? ' (repeat request)' : ''}: ${name}`,
+    text: `${name} (${email}) requested rater access${again}.${note ? `\n\n"${note}"` : ''}\n\n${pendingCount} request(s) waiting. Review: ${config.appUrl}/admin/users\n\nTurn these alerts off on your account page.`,
     html: layout({
       preheader: `${name} wants to become a rater.`,
       heading: 'New access request',
       body:
-        p(`<strong>${esc(name)}</strong> (${esc(email)}) requested rater access.`) +
+        p(`<strong>${esc(name)}</strong> (${esc(email)}) requested rater access${esc(again)}.`) +
         (note ? `<blockquote style="margin:0 0 14px;padding:10px 14px;background:#f1f5f9;border-left:4px solid ${NAVY};border-radius:6px">${esc(note)}</blockquote>` : '') +
         p(`${pendingCount} request${pendingCount === 1 ? ' is' : 's are'} waiting for review.`) +
         button(`${config.appUrl}/admin/users`, 'Review requests'),

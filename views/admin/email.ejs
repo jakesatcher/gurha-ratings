@@ -3,6 +3,14 @@
 <%- include('_nav') %>
 
 <% mail.warnings.forEach(function (w) { %><div class="alert alert-warn"><%= w %></div><% }) %>
+<% if (!admins.some(function (a) { return a.notify_access_requests; })) { %>
+  <div class="alert alert-warn">No admin has access-request alerts turned on, so nobody is emailed when someone requests access. Turn them on from <a href="/account">your account page</a>.</div>
+<% } %>
+<% if (lastAlert && lastAlert.status === 'failed') { %>
+  <div class="alert alert-error">The last access-request alert failed to send: <%= lastAlert.error %></div>
+<% } else if (lastAlert && lastAlert.status === 'console') { %>
+  <div class="alert alert-warn">The last access-request alert was only printed to the server log because no email provider was configured when it was sent.</div>
+<% } %>
 
 <div class="grid-2">
   <section class="card">

@@ -24,6 +24,8 @@ router.get('/email', async (req, res) => {
        FROM email_log`
   );
   const admins = await db.many(`SELECT id, name, email, notify_access_requests FROM users WHERE role = 'admin' AND status = 'approved' ORDER BY lower(name)`);
+  // The latest access-request alert, so "did the last one go out?" is answered at a glance.
+  const lastAlert = await db.one(`SELECT created_at, status, error FROM email_log WHERE kind = 'access_requested' ORDER BY id DESC LIMIT 1`);
   res.render('admin/email', {
     title: 'Email',
     mail: {
@@ -37,6 +39,7 @@ router.get('/email', async (req, res) => {
     logRows,
     stats,
     admins,
+    lastAlert,
     failedOnly,
   });
 });
