@@ -153,11 +153,14 @@ async function loadRatings({ playerIds, ratingId, seasonId } = {}) {
     }
   }
   const ratings = await db.many(
-    `SELECT r.*, u.name AS rater_name, u.email AS rater_email, ub.name AS updated_by_name, s.name AS season_name
+    `SELECT r.*, u.name AS rater_name, u.email AS rater_email, ub.name AS updated_by_name, s.name AS season_name,
+            pf.code AS paper_form_code, pf.id AS paper_form_id
        FROM ratings r
        JOIN users u ON u.id = r.rater_id
        JOIN seasons s ON s.id = r.season_id
        LEFT JOIN users ub ON ub.id = r.updated_by
+       LEFT JOIN paper_submissions ps ON ps.id = r.paper_submission_id
+       LEFT JOIN paper_forms pf ON pf.id = ps.form_id
       WHERE ${where.join(' AND ')}
       ORDER BY r.created_at`,
     params

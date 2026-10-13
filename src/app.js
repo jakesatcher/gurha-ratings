@@ -27,7 +27,7 @@ function createApp() {
       contentSecurityPolicy: {
         directives: {
           defaultSrc: ["'self'"],
-          imgSrc: ["'self'", 'data:'],
+          imgSrc: ["'self'", 'data:', 'blob:'], // blob: previews a scan before it's uploaded
           scriptSrc: ["'self'"],
           styleSrc: ["'self'"],
           fontSrc: ["'self'"],

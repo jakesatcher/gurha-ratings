@@ -24,6 +24,7 @@ router.use(requireAdmin);
 router.use(require('./admin-seasons'));
 router.use(require('./admin-people'));
 router.use(require('./admin-email'));
+router.use(require('./admin-paper'));
 
 const id = (req) => Number(req.params.id) || 0;
 
@@ -42,7 +43,7 @@ router.get('/', async (req, res) => {
   const stats = await db.one(
     `SELECT
       (SELECT count(*) FROM users WHERE status = 'pending')::int AS pending,
-      (SELECT count(*) FROM users WHERE status = 'approved')::int AS users,
+      (SELECT count(*) FROM users WHERE status = 'approved' AND can_login)::int AS users,
       (SELECT count(*) FROM season_players sp JOIN players p ON p.id = sp.player_id WHERE sp.season_id = $1 AND p.active)::int AS players,
       (SELECT count(*) FROM ratings WHERE season_id = $1)::int AS ratings,
       (SELECT count(*) FROM season_players sp JOIN players p ON p.id = sp.player_id
@@ -70,6 +71,7 @@ router.get('/users', async (req, res) => {
   const users = await db.many(
     `SELECT u.*, a.name AS approved_by_name, (SELECT count(*) FROM ratings r WHERE r.rater_id = u.id)::int AS rating_count
        FROM users u LEFT JOIN users a ON a.id = u.approved_by
+      WHERE u.can_login -- paper raters (no login) are listed under Admin → Paper forms
       ORDER BY CASE u.status WHEN 'pending' THEN 0 WHEN 'approved' THEN 1 ELSE 2 END, lower(u.name)`
   );
   res.render('admin/users', { title: 'Users', users });

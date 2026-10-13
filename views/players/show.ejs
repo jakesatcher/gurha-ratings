@@ -118,6 +118,7 @@
     <details class="card rating-card" id="rating-<%= r.id %>" <%= r.rater_id === currentUser.id ? 'open' : '' %>>
       <summary>
         <span><strong><%= r.display_name %></strong><%= r.rater_id === currentUser.id ? ' (you)' : '' %>
+          <% if (r.source === 'paper') { %><span class="tag" title="Entered from a paper form">paper<% if (currentUser.role === 'admin' && r.paper_form_id) { %> · <a href="/admin/paper/forms/<%= r.paper_form_id %>"><%= r.paper_form_code %></a><% } %></span><% } %>
           <span class="muted small">· <%= fmtDate(r.created_at) %><%= r.updated_by && r.updated_by !== r.rater_id ? ' · edited by admin' : '' %></span></span>
         <span class="rating-summary-levels">
           <span class="small muted"><%= fmt(r.overall) %></span>

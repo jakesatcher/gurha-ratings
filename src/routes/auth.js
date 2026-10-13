@@ -118,7 +118,7 @@ router.post('/register', registerLimiter, async (req, res) => {
   errors.push(...passwordProblems(req.body.password, req.body.password_confirm));
   if (errors.length) return res.status(422).render('auth/register', { title: 'Request access', values, errors });
 
-  const existing = await db.one('SELECT id, name, email, status, request_note, requested_role, role FROM users WHERE lower(email) = $1', [values.email]);
+  const existing = await db.one('SELECT id, name, email, status, request_note, requested_role, role, can_login FROM users WHERE lower(email) = $1', [values.email]);
   let requester = null;
   let repeat = false;
   if (!existing) {
@@ -128,6 +128,17 @@ router.post('/register', registerLimiter, async (req, res) => {
       [values.email, values.name, await bcrypt.hash(req.body.password, 12), values.request_note || null, values.requested_role]
     );
     await audit(requester.id, 'access_requested', 'user', requester.id);
+  } else if (!existing.can_login) {
+    // A paper rater asking for a real account: same record (so their paper ratings carry over),
+    // now with a password, waiting for approval like any other request.
+    requester = await db.one(
+      `UPDATE users SET password_hash = $1, can_login = true, status = 'pending', role = $2, requested_role = $2,
+              request_note = coalesce($3, request_note), updated_at = now()
+        WHERE id = $4 RETURNING id, name, email, requested_role`,
+      [await bcrypt.hash(req.body.password, 12), values.requested_role, values.request_note || null, existing.id]
+    );
+    await audit(existing.id, 'access_requested', 'user', existing.id, { previously: 'paper rater' });
+    values.request_note = `${values.request_note ? `${values.request_note}\n` : ''}(Already rates on paper as ${existing.name}.)`;
   } else if (['pending', 'rejected'].includes(existing.status)) {
     // Someone asking again (still waiting, or previously not approved): nudge the admins.
     // Nothing about the account changes, and the requester sees the same page as everyone else.
@@ -150,7 +161,8 @@ router.get('/login', (req, res) => {
 router.post('/login', loginLimiter, async (req, res) => {
   const email = String(req.body.email || '').trim().toLowerCase();
   const password = String(req.body.password || '');
-  const user = await db.one('SELECT * FROM users WHERE lower(email) = $1', [email]);
+  // Paper raters (can_login = false) have no password and can never sign in.
+  const user = await db.one('SELECT * FROM users WHERE lower(email) = $1 AND can_login', [email]);
   const ok = await bcrypt.compare(password, user ? user.password_hash : DUMMY_HASH);
   const fail = (msg) => res.status(401).render('auth/login', { title: 'Sign in', email, error: msg });
 
@@ -308,7 +320,7 @@ router.get('/forgot', (req, res) => res.render('auth/forgot', { title: 'Reset pa
 
 router.post('/forgot', resetLimiter, async (req, res) => {
   const email = String(req.body.email || '').trim().toLowerCase();
-  const user = await db.one(`SELECT id, email, name FROM users WHERE lower(email) = $1 AND status = 'approved'`, [email]);
+  const user = await db.one(`SELECT id, email, name FROM users WHERE lower(email) = $1 AND status = 'approved' AND can_login`, [email]);
   if (user) {
     const token = randomToken(32);
     await db.query(`INSERT INTO password_resets (user_id, token_hash, expires_at) VALUES ($1, $2, now() + interval '1 hour')`, [

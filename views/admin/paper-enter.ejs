@@ -1,0 +1,91 @@
+<%- include('../partials/head') %>
+<%
+  const v = values || {};
+  const val = (k) => (v[k] === undefined || v[k] === null ? '' : String(v[k]));
+  const cats = form.categories;
+  const onForm = new Set(form.players.map(p => p.id));
+  const writeInChoices = seasonRoster.filter(p => !onForm.has(p.id))
+    .sort((a, b) => (a.last_name + a.first_name).localeCompare(b.last_name + b.first_name));
+%>
+<p class="crumbs"><a href="/admin/paper/forms/<%= form.id %>">← <%= form.code %></a></p>
+<h1>Enter <%= form.code %></h1>
+<p class="muted page-sub"><%= form.title %> · <%= form.season_name %>. Type in one rater's sheet. Leave rows they left blank empty; they're skipped.</p>
+
+<%- include('../partials/errors') %>
+
+<form method="post" action="/admin/paper/forms/<%= form.id %>/enter" enctype="multipart/form-data" class="paper-entry"
+      data-weights='<%= JSON.stringify(cats.map(c => ({ id: c.id, w: Number(c.weight) }))) %>'
+      data-levels='<%= JSON.stringify(levels.LEVELS) %>'>
+  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+  <section class="card">
+    <h2>Who filled it in</h2>
+    <div class="grid-2">
+      <label>Rater
+        <select name="rater_id" data-new-rater required>
+          <option value="">Choose…</option>
+          <option value="new" <%= val('rater_id') === 'new' ? 'selected' : '' %>>+ New paper rater (no account)</option>
+          <% const paperR = raters.filter(r => !r.can_login), acctR = raters.filter(r => r.can_login); %>
+          <% if (paperR.length) { %><optgroup label="Paper raters">
+            <% paperR.forEach(function (r) { %><option value="<%= r.id %>" <%= val('rater_id') === String(r.id) ? 'selected' : '' %>><%= r.name %><%= r.email ? ` (${r.email})` : '' %></option><% }) %>
+          </optgroup><% } %>
+          <% if (acctR.length) { %><optgroup label="Raters with accounts">
+            <% acctR.forEach(function (r) { %><option value="<%= r.id %>" <%= val('rater_id') === String(r.id) ? 'selected' : '' %>><%= r.name %> (<%= r.email %>)</option><% }) %>
+          </optgroup><% } %>
+        </select>
+      </label>
+      <label>Scan or photo of the sheet <small class="muted">(optional; PDF, JPEG, PNG, WebP or HEIC, up to 10 MB)</small>
+        <input type="file" name="scan" accept="application/pdf,image/*" data-scan-preview></label>
+    </div>
+    <div class="grid-2 new-rater" data-new-rater-fields>
+      <label>New rater's name <input name="new_rater_name" maxlength="100" value="<%= val('new_rater_name') %>"></label>
+      <label>Email <small class="muted">(optional, from the sheet)</small> <input type="email" name="new_rater_email" maxlength="200" value="<%= val('new_rater_email') %>"></label>
+    </div>
+    <div class="scan-preview" data-scan-target hidden></div>
+  </section>
+
+  <section class="card">
+    <h2>Ratings</h2>
+    <p class="small muted">Scores <%= cats[0] ? `${cats[0].min_score}–${cats[0].max_score}` : '' %>. Levels: <%= levels.LEVELS.join(' ') %>. Game play: C, U, S or R (notes required for S/R). Overall is calculated as you type.</p>
+    <div class="table-wrap"><table class="table compact paper-grid">
+      <thead><tr>
+        <th>#</th><th>Player</th>
+        <% cats.forEach(function (c) { %><th title="<%= c.name %> (<%= Number(c.weight) %>%)"><%= c.name %></th><% }) %>
+        <th>Overall</th><th>Your level</th><th>Game play</th><th>Final level</th><th>Evidence / notes</th>
+      </tr></thead>
+      <tbody>
+        <% for (let i = 0; i < form.rowCount; i++) { const p = form.players[i]; %>
+        <tr data-paper-row>
+          <td class="num"><%= i + 1 %></td>
+          <td class="nowrap">
+            <% if (p) { %>
+              <%= p.jersey_number ? `#${p.jersey_number} ` : '' %><%= p.last_name %>, <%= p.first_name %><%= p.is_sub ? ' (sub)' : '' %>
+            <% } else { %>
+              <select name="r<%= i %>_player" aria-label="Write-in player for row <%= i + 1 %>">
+                <option value="">Write-in: choose…</option>
+                <% writeInChoices.forEach(function (w) { %><option value="<%= w.id %>" <%= val(`r${i}_player`) === String(w.id) ? 'selected' : '' %>><%= w.last_name %>, <%= w.first_name %><%= w.team ? ` · ${w.team}` : '' %></option><% }) %>
+              </select>
+            <% } %>
+          </td>
+          <% cats.forEach(function (c) { %>
+            <td><input class="cell" type="number" inputmode="numeric" min="<%= c.min_score %>" max="<%= c.max_score %>" step="1" name="r<%= i %>_s<%= c.id %>" value="<%= val(`r${i}_s${c.id}`) %>" aria-label="Row <%= i + 1 %> <%= c.name %>" data-cat="<%= c.id %>"></td>
+          <% }) %>
+          <td class="nowrap" data-overall>—</td>
+          <td><input class="cell cell-lvl" name="r<%= i %>_ind" list="paper-levels" maxlength="3" value="<%= val(`r${i}_ind`) %>" aria-label="Row <%= i + 1 %> independent level" autocapitalize="characters"></td>
+          <td><select name="r<%= i %>_gp" aria-label="Row <%= i + 1 %> game play">
+            <option value=""></option>
+            <% [['C','C · Consistently'],['U','U · Usually'],['S','S · Sometimes'],['R','R · Rarely']].forEach(function (o) { %><option value="<%= o[0] %>" <%= val(`r${i}_gp`).toUpperCase() === o[0] ? 'selected' : '' %>><%= o[1] %></option><% }) %>
+          </select></td>
+          <td><input class="cell cell-lvl" name="r<%= i %>_final" list="paper-levels" maxlength="3" value="<%= val(`r${i}_final`) %>" aria-label="Row <%= i + 1 %> final level" autocapitalize="characters"></td>
+          <td><input class="cell-notes" name="r<%= i %>_notes" maxlength="4000" value="<%= val(`r${i}_notes`) %>" aria-label="Row <%= i + 1 %> notes"></td>
+        </tr>
+        <% } %>
+      </tbody>
+    </table></div>
+    <datalist id="paper-levels"><% levels.LEVELS.forEach(function (l) { %><option value="<%= l %>"><% }) %></datalist>
+  </section>
+
+  <p class="small muted">If this rater already rated a player this season (online or on another sheet), that row is skipped and the existing rating is kept. Admins can edit it from the player page.</p>
+  <button class="btn btn-primary" type="submit">Save ratings</button>
+</form>
+<%- include('../partials/foot') %>

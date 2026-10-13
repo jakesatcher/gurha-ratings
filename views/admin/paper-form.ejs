@@ -1,0 +1,45 @@
+<%- include('../partials/head') %>
+<p class="crumbs"><a href="/admin/paper">← Paper forms</a></p>
+<div class="page-head">
+  <div>
+    <h1><%= form.code %></h1>
+    <p class="muted page-sub"><%= form.title %><%= form.division ? ` · ${form.division}` : '' %> · <%= form.season_name %> · <%= form.players.length %> players + <%= form.blank_rows %> write-in rows</p>
+  </div>
+  <div class="actions">
+    <a class="btn" href="/admin/paper/forms/<%= form.id %>/print?guide=1">Print</a>
+    <a class="btn btn-primary" href="/admin/paper/forms/<%= form.id %>/enter">Enter a filled-in sheet</a>
+  </div>
+</div>
+
+<section class="card">
+  <h2>Sheets entered (<%= submissions.length %>)</h2>
+  <% if (!submissions.length) { %><p class="muted">Nothing entered yet. Each rater's copy is entered separately.</p><% } else { %>
+  <div class="table-wrap"><table class="table compact">
+    <thead><tr><th>Rater</th><th class="num">Ratings saved</th><th>Scan</th><th>Entered</th></tr></thead>
+    <tbody>
+      <% submissions.forEach(function (s) { %>
+        <tr>
+          <td><%= s.rater_name %><% if (!s.can_login) { %> <span class="tag">paper</span><% } %></td>
+          <td class="num"><%= s.ratings %></td>
+          <td><% if (s.has_scan) { %><a href="/admin/paper/submissions/<%= s.id %>/scan" target="_blank" rel="noopener">View</a> · <a href="/admin/paper/submissions/<%= s.id %>/scan?download=1">Download</a><% } else { %><span class="muted">—</span><% } %></td>
+          <td class="small"><%= fmtDate(s.created_at) %><%= s.entered_by_name ? ` by ${s.entered_by_name}` : '' %></td>
+        </tr>
+      <% }) %>
+    </tbody>
+  </table></div>
+  <% } %>
+</section>
+
+<section class="card">
+  <h2>Players on this form</h2>
+  <ol class="small paper-roster">
+    <% form.players.forEach(function (p) { %><li><%= p.jersey_number ? `#${p.jersey_number} ` : '' %><a href="/players/<%= p.id %>"><%= p.last_name %>, <%= p.first_name %></a><%= p.is_sub ? ' (sub)' : '' %></li><% }) %>
+  </ol>
+  <% if (!submissions.length) { %>
+    <form method="post" action="/admin/paper/forms/<%= form.id %>/delete" data-confirm="Delete <%= form.code %>? Printed copies can't be entered afterwards.">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <button class="btn btn-small btn-danger" type="submit">Delete form</button>
+    </form>
+  <% } %>
+</section>
+<%- include('../partials/foot') %>

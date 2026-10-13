@@ -423,3 +423,129 @@ test('viewer role: request, approve, browse everything, but never rate or modify
   await h.post(admin, `/admin/users/${val.id}/make-viewer`, {}, '/admin/users');
   assert.strictEqual((await viewer.get(`/players/${vic.id}/rate`)).status, 403);
 });
+
+test('paper forms: admin prints a multi-player sheet and enters it; paper raters cannot sign in', async () => {
+  await h.createUser({ email: 'pf-admin@test.com', name: 'Paper Admin', role: 'admin' });
+  const admin = await h.login(app, 'pf-admin@test.com');
+  for (const [first, last, jersey] of [['Pat', 'Paperson', '4'], ['Quinn', 'Quill', '9'], ['Rae', 'Ream', '12']]) {
+    await h.post(admin, '/admin/players', { first_name: first, last_name: last, team: 'Pens', division: 'C1', jersey_number: jersey }, '/admin/players/new');
+  }
+  await h.post(admin, '/admin/players', { first_name: 'Sam', last_name: 'Subber', team: 'Other', division: 'C1' }, '/admin/players/new');
+  const pens = await h.db.one(`SELECT id FROM teams WHERE name = 'Pens'`);
+  const ids = Object.fromEntries((await h.db.many(`SELECT id, last_name FROM players WHERE last_name IN ('Paperson', 'Quill', 'Ream', 'Subber')`)).map((p) => [p.last_name, p.id]));
+
+  // Raters and viewers can't reach paper forms
+  await h.createUser({ email: 'pf-rater@test.com', name: 'Online Rater' });
+  const rater = await h.login(app, 'pf-rater@test.com');
+  assert.strictEqual((await rater.get('/admin/paper')).status, 403);
+  assert.strictEqual((await h.post(rater, '/admin/paper/forms', { team_ids: String(pens.id) })).status, 403);
+
+  // Team page offers admins a print button; creating a form for one team goes straight to the print view
+  assert.match((await admin.get(`/teams/${pens.id}`)).text, /Print paper form/);
+  const created = await h.post(admin, '/admin/paper/forms', { team_ids: String(pens.id), blank_rows: '2', guide: '1' }, '/admin/paper');
+  assert.strictEqual(created.status, 302);
+  const form = await h.db.one('SELECT * FROM paper_forms ORDER BY id DESC LIMIT 1');
+  assert.strictEqual(created.headers.location, `/admin/paper/forms/${form.id}/print?guide=1`);
+  assert.match(form.code, /^PF-\d{4}$/);
+  const print = await admin.get(created.headers.location);
+  assert.strictEqual(print.status, 200);
+  for (const name of ['Paperson, Pat', 'Quill, Quinn', 'Ream, Rae']) assert.ok(print.text.includes(name), name);
+  assert.strictEqual((print.text.match(/write in name/g) || []).length, 2);
+  assert.match(print.text, new RegExp(`${form.code}<small>Page 1 of 2`));
+  assert.match(print.text, /Rating guide/);
+  assert.match((await admin.get('/admin/paper')).text, new RegExp(form.code));
+
+  // Online rating already exists for Ream by the online rater (paper copy for them is skipped)
+  await h.post(rater, `/players/${ids.Ream}/rate`, fullRating());
+
+  const enterUrl = `/admin/paper/forms/${form.id}/enter`;
+  const enterPage = await admin.get(enterUrl);
+  assert.strictEqual(enterPage.status, 200);
+  assert.match(enterPage.text, /New paper rater/);
+  const row = (i, o = {}) => {
+    const out = { [`r${i}_s1`]: '8', [`r${i}_s2`]: '7', [`r${i}_s3`]: '6', [`r${i}_s4`]: '5', [`r${i}_s5`]: '7', [`r${i}_s6`]: '6', [`r${i}_ind`]: 'b3', [`r${i}_gp`]: 'C', [`r${i}_final`]: 'B3', [`r${i}_notes`]: 'Solid' };
+    for (const [k, v] of Object.entries(o)) out[`r${i}_${k}`] = v;
+    return out;
+  };
+  const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(32)]);
+  const send = (agent, fields, file) => {
+    let req = agent.post(enterUrl);
+    for (const [k, v] of Object.entries(fields)) req = req.field(k, v);
+    if (file) req = req.attach('scan', file.buf, { filename: file.name, contentType: file.type });
+    return req;
+  };
+
+  // Errors: no rater, a partial row, and S without notes; nothing is saved
+  const bad = await send(admin, { _csrf: h.csrfFrom(enterPage.text), rater_id: 'new', new_rater_name: '', ...row(0, { s3: '' }), ...row(1, { gp: 'S', notes: '' }) });
+  assert.strictEqual(bad.status, 422);
+  assert.match(bad.text, /Enter the new paper rater&#39;s name/);
+  assert.match(bad.text, /Row 1 \(Pat Paperson\): .*Puck Skills|Row 1 \(Pat Paperson\)/);
+  assert.match(bad.text, /Row 2 \(Quinn Quill\): Explain the game performance check/);
+  assert.strictEqual((await h.db.one('SELECT count(*)::int AS n FROM paper_submissions')).n, 0);
+
+  // Missing CSRF on the multipart form is rejected
+  assert.strictEqual((await send(admin, { rater_id: 'new', new_rater_name: 'X', ...row(0) })).status, 403);
+
+  // A bad scan type is rejected
+  const badScan = await send(admin, { _csrf: h.csrfFrom(enterPage.text), rater_id: 'new', new_rater_name: 'Paula Pen', ...row(0) }, { buf: Buffer.from('<script>alert(1)</script>'), name: 'x.png', type: 'image/png' });
+  assert.strictEqual(badScan.status, 422);
+  assert.match(badScan.text, /PDF or a photo/);
+
+  // Good entry for a new paper rater: rows 1, 2 and a write-in (row 4); row 3 left blank
+  const ok = await send(admin, {
+    _csrf: h.csrfFrom(enterPage.text), rater_id: 'new', new_rater_name: 'Paula Pen', new_rater_email: 'paula@test.com',
+    ...row(0), ...row(1, { gp: 'r', notes: 'Fades late', final: 'C1' }), ...row(3, { player: String(ids.Subber) }),
+  }, { buf: png, name: 'sheet.png', type: 'image/png' });
+  assert.strictEqual(ok.status, 302, ok.text);
+  const paula = await h.db.one(`SELECT * FROM users WHERE email = 'paula@test.com'`);
+  assert.deepStrictEqual([paula.role, paula.status, paula.can_login], ['rater', 'approved', false]);
+  const saved = await h.db.many(`SELECT player_id, source, independent_level, game_performance, game_performance_note, final_level FROM ratings WHERE rater_id = $1 ORDER BY player_id`, [paula.id]);
+  assert.deepStrictEqual(saved.map((r) => r.player_id).sort(), [ids.Paperson, ids.Quill, ids.Subber].sort());
+  assert.ok(saved.every((r) => r.source === 'paper'));
+  const quill = saved.find((r) => r.player_id === ids.Quill);
+  assert.deepStrictEqual([quill.game_performance, quill.game_performance_note, quill.final_level, quill.independent_level], ['rarely', 'Fades late', 'C1', 'B3']);
+  const sub = await h.db.one('SELECT * FROM paper_submissions WHERE rater_id = $1', [paula.id]);
+  assert.strictEqual(sub.scan_type, 'image/png');
+
+  // Detail page lists the entry; scan is served to admins only
+  const detail = await admin.get(`/admin/paper/forms/${form.id}`);
+  assert.match(detail.text, /Paula Pen/);
+  const scan = await admin.get(`/admin/paper/submissions/${sub.id}/scan`);
+  assert.strictEqual(scan.status, 200);
+  assert.strictEqual(scan.headers['content-type'], 'image/png');
+  assert.strictEqual((await rater.get(`/admin/paper/submissions/${sub.id}/scan`)).status, 403);
+
+  // Player page shows it came from paper
+  const pat = await admin.get(`/players/${ids.Paperson}`);
+  assert.match(pat.text, new RegExp(`paper · <a href="/admin/paper/forms/${form.id}">${form.code}`));
+
+  // Entering the online rater's sheet: Ream is skipped (already rated), Paperson saved
+  const page2 = await admin.get(enterUrl);
+  const second = await send(admin, { _csrf: h.csrfFrom(page2.text), rater_id: String((await h.db.one(`SELECT id FROM users WHERE email = 'pf-rater@test.com'`)).id), ...row(0), ...row(2) });
+  assert.strictEqual(second.status, 302);
+  const flashPage = await admin.get(second.headers.location);
+  assert.match(flashPage.text, /Saved 1 rating/);
+  assert.match(flashPage.text, /Skipped 1 row.*Rae Ream \(row 3\)/);
+
+  // Paper raters can't sign in or reset a password, and don't appear in Users
+  const anon = h.request.agent(app);
+  const lp = await anon.get('/login');
+  const login = await anon.post('/login').type('form').send({ _csrf: h.csrfFrom(lp.text), email: 'paula@test.com', password: '!' });
+  assert.notStrictEqual(login.headers.location, '/mfa');
+  assert.doesNotMatch((await admin.get('/admin/users')).text, /Paula Pen/);
+  assert.match((await admin.get('/admin/paper')).text, /Paula Pen/);
+
+  // A form with entries can't be deleted
+  await h.post(admin, `/admin/paper/forms/${form.id}/delete`, {}, '/admin/paper');
+  assert.ok(await h.db.one('SELECT id FROM paper_forms WHERE id = $1', [form.id]));
+
+  // The paper rater later requests an account with the same email: same record, ratings kept
+  const reg = await anon.get('/register');
+  const r = await anon.post('/register').type('form').send({
+    _csrf: h.csrfFrom(reg.text), name: 'Paula Pen', email: 'paula@test.com', password: 'Slapshot!Goal47', password_confirm: 'Slapshot!Goal47', requested_role: 'rater',
+  });
+  assert.strictEqual(r.status, 200);
+  const after = await h.db.one(`SELECT id, can_login, status FROM users WHERE email = 'paula@test.com'`);
+  assert.deepStrictEqual([after.id, after.can_login, after.status], [paula.id, true, 'pending']);
+  assert.strictEqual((await h.db.one('SELECT count(*)::int AS n FROM ratings WHERE rater_id = $1', [paula.id])).n, 3);
+});

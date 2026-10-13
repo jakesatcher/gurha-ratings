@@ -170,6 +170,18 @@ Imports match people in this order:
 
 After upload, the review page shows every row's match (**Existing**, **New**, **Same person** as another row in the file, or **New · review**) and how many people the roster rows add up to. You then pick the teams and the season to import into. Nothing is saved until you confirm, and the upload is discarded afterwards. Only the Excel 97–2003 `.xls` format is supported.
 
+## Paper rating forms
+
+For raters who'd rather not create an account. **Admin → Paper forms** (or **Print paper form** on a team page):
+
+1. **Print.** Pick one or more teams; each gets a numbered form (e.g. `PF-0007`) listing the whole roster, about 10 players per landscape Letter page, with a few blank write-in rows and an optional rating-guide page. Each page carries the form code and page number so scans can be matched up.
+2. **Fill in.** Raters write their name, a 0–11 score per category, their independent level, game play (circle C/U/S/R), final level and notes. Blank rows are fine; they're skipped.
+3. **Enter.** Only admins can enter sheets. Open the form → **Enter a filled-in sheet**, choose the rater (or create a *paper rater* by name, optional email), optionally attach the scan or photo (PDF, JPEG, PNG, WebP, HEIC; 10 MB max), and type the grid in. Overall scores calculate as you type. Partly filled rows are rejected with a row-by-row list; "Sometimes"/"Rarely" need notes.
+
+Paper ratings follow the same once-per-season rule: if that rater already rated a player (online or on another sheet), the row is skipped and reported, and the existing rating stays (admins can edit it from the player page). Ratings show a **paper** tag (admins see the form code). Scans are stored in the database and only admins can view them.
+
+Paper raters have no password and can't sign in or reset a password, and they don't appear in the Users list. If one later requests access with the same email, their record (and ratings) is converted into a normal pending account.
+
 ## Import format
 
 Files are imported into the season selected at the top of the page. Use CSV or JSON with any of these columns: `first_name`, `last_name` (or one `name` column), `jersey_number`, `team`, `division`, `position` (F/D/G or Forward/Defense/Goalie), `age`, `email`, `external_id`, `notes`. Download a template from Admin → Import.

@@ -5,8 +5,8 @@ const db = require('../db');
 async function loadUser(req, res, next) {
   res.locals.currentUser = null;
   if (req.session && req.session.userId) {
-    const user = await db.one('SELECT id, email, name, role, status, mfa_method, notify_access_requests FROM users WHERE id = $1', [req.session.userId]);
-    if (user && user.status === 'approved') {
+    const user = await db.one('SELECT id, email, name, role, status, mfa_method, notify_access_requests, can_login FROM users WHERE id = $1', [req.session.userId]);
+    if (user && user.status === 'approved' && user.can_login) {
       // Viewers can see everything but can't rate; raters and admins can.
       user.canRate = user.role === 'admin' || user.role === 'rater';
       req.user = user;

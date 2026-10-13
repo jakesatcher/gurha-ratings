@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title><%= form.code %> · <%= form.title %> · GURHA rating form</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/css/paper-print.css">
+  <script src="/static/js/app.js" defer></script>
+</head>
+<body>
+<%
+  const totalPages = pages.length + (guide ? 1 : 0);
+  const cats = form.categories;
+%>
+<div class="toolbar no-print">
+  <a href="/admin/paper/forms/<%= form.id %>">← <%= form.code %></a>
+  <button type="button" data-print>Print</button>
+  <% if (guide) { %><a href="?">Hide guide page</a><% } else { %><a href="?guide=1">Add guide page</a><% } %>
+  <span>Print landscape. Hand one copy to each rater; enter each copy separately.</span>
+</div>
+
+<% pages.forEach(function (page, pi) { %>
+<section class="sheet">
+  <header class="sheet-head">
+    <div>
+      <div class="brand">GURHA <span>Player Rating Form</span></div>
+      <div class="sub"><strong><%= form.title %></strong><%= form.division ? ` · ${form.division}` : '' %> · <%= form.season_name %></div>
+    </div>
+    <div class="code"><%= form.code %><small>Page <%= pi + 1 %> of <%= totalPages %></small></div>
+  </header>
+
+  <div class="rater-lines">
+    <span>Rater name <i></i></span>
+    <span>Email or phone <i></i></span>
+    <span>Date <i class="short"></i></span>
+  </div>
+
+  <table class="grid">
+    <thead>
+      <tr>
+        <th class="n">#</th>
+        <th class="jersey">Jersey</th>
+        <th class="player">Player</th>
+        <% cats.forEach(function (c) { %><th class="score"><%= c.name %><small><%= Number(c.weight) %>% · <%= c.min_score %>–<%= c.max_score %></small></th><% }) %>
+        <th class="lvl">Your level<small>independent</small></th>
+        <th class="gp">Game play<small>C · U · S · R</small></th>
+        <th class="lvl">Final level</th>
+        <th class="notes">Evidence / notes<small>required for S or R</small></th>
+      </tr>
+    </thead>
+    <tbody>
+      <% page.forEach(function (row) { const p = row.p; %>
+      <tr>
+        <td class="n"><%= row.n %></td>
+        <td class="jersey"><%= p && p.jersey_number ? p.jersey_number : '' %></td>
+        <td class="player"><% if (p) { %><%= p.last_name %>, <%= p.first_name %><%= p.is_sub ? ' (sub)' : '' %><% } else { %><span class="write-in">write in name</span><% } %></td>
+        <% cats.forEach(function () { %><td class="score"></td><% }) %>
+        <td class="lvl"></td>
+        <td class="gp"><span>C</span><span>U</span><span>S</span><span>R</span></td>
+        <td class="lvl"></td>
+        <td class="notes"></td>
+      </tr>
+      <% }) %>
+    </tbody>
+  </table>
+
+  <footer class="legend">
+    <p><strong>Scores:</strong> whole numbers, D 0–3 · C 4–6 · B 7–9 · A 10–11. <strong>Levels:</strong> BEG D3 D2 D1 C3 C2 C1 B3 B2 B1 A2 A1.
+      <strong>Game play</strong> (does the player consistently show these skills in games?): circle <b>C</b>onsistently, <b>U</b>sually, <b>S</b>ometimes or <b>R</b>arely.</p>
+    <p>Rate what you see, not what you think. Leave a row blank if you haven't seen the player. Fill in every column for each player you rate.
+      Signature <i class="sig"></i></p>
+    <p class="code-foot"><%= form.code %> · page <%= pi + 1 %>/<%= totalPages %></p>
+  </footer>
+</section>
+<% }) %>
+
+<% if (guide) { %>
+<section class="sheet guide-sheet">
+  <header class="sheet-head">
+    <div>
+      <div class="brand">GURHA <span>Rating guide</span></div>
+      <div class="sub">Overall = <%= cats.map(c => `${c.name} × ${(Number(c.weight) / 100).toFixed(2)}`).join(' + ') %>, rounded to a level.</div>
+    </div>
+    <div class="code"><%= form.code %><small>Page <%= totalPages %> of <%= totalPages %></small></div>
+  </header>
+  <div class="guide-grid">
+    <% cats.forEach(function (c) { %>
+      <div class="guide-cat">
+        <h3><%= c.name %> <small><%= Number(c.weight) %>%</small></h3>
+        <% if (c.key_question) { %><p class="kq"><%= c.key_question %></p><% } %>
+        <% if (c.considerations.length) { %><p class="cons"><%= c.considerations.join(' · ') %></p><% } %>
+        <% c.guide.forEach(function (g) { %><p><b><%= g.range %></b> <%= g.text %></p><% }) %>
+      </div>
+    <% }) %>
+  </div>
+  <p class="legend">Rate what the player consistently demonstrates in game situations. Don't rate on reputation, age, size or potential, and complete your ratings before discussing players with other raters.</p>
+</section>
+<% } %>
+</body>
+</html>

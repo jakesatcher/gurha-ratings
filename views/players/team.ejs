@@ -5,7 +5,18 @@
     <h1><%= team.name %></h1>
     <p class="muted page-sub"><%= team.division || 'No league' %> · <%= season.name %></p>
   </div>
-  <a class="btn btn-small" href="/reports/teams?team=<%= team.id %>">Team summary</a>
+  <div class="actions">
+    <a class="btn btn-small" href="/reports/teams?team=<%= team.id %>">Team summary</a>
+    <% if (currentUser.role === 'admin') { %>
+    <form method="post" action="/admin/paper/forms" class="inline">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <input type="hidden" name="team_ids" value="<%= team.id %>">
+      <input type="hidden" name="blank_rows" value="3">
+      <input type="hidden" name="guide" value="1">
+      <button class="btn btn-small" type="submit">Print paper form</button>
+    </form>
+    <% } %>
+  </div>
 </div>
 
 <div class="scoreboard">

@@ -172,3 +172,67 @@
     });
   });
 })();
+
+// Paper form entry: live overall per row, "new paper rater" fields, scan preview.
+(function () {
+  var form = document.querySelector('form.paper-entry');
+  if (!form) return;
+  var weights = JSON.parse(form.getAttribute('data-weights') || '[]');
+  var levels = JSON.parse(form.getAttribute('data-levels') || '[]');
+  var totalW = weights.reduce(function (s, c) { return s + c.w; }, 0) || 1;
+
+  function recalcRow(tr) {
+    var sum = 0, filled = 0;
+    weights.forEach(function (c) {
+      var el = tr.querySelector('[data-cat="' + c.id + '"]');
+      if (el && el.value !== '' && !isNaN(Number(el.value))) { sum += Number(el.value) * c.w; filled++; }
+    });
+    var out = tr.querySelector('[data-overall]');
+    if (!out) return;
+    if (filled !== weights.length) { out.textContent = filled ? '…' : '—'; return; }
+    var score = sum / totalW;
+    var lvl = levels[Math.min(levels.length - 1, Math.max(0, Math.round(score)))];
+    out.textContent = score.toFixed(2) + ' · ' + lvl;
+  }
+  form.querySelectorAll('[data-paper-row]').forEach(function (tr) {
+    recalcRow(tr);
+    tr.addEventListener('input', function () { recalcRow(tr); });
+  });
+  // Level cells: uppercase as you type.
+  form.querySelectorAll('.cell-lvl').forEach(function (el) {
+    el.addEventListener('input', function () { el.value = el.value.toUpperCase(); });
+  });
+
+  var sel = form.querySelector('[data-new-rater]');
+  var fields = form.querySelector('[data-new-rater-fields]');
+  function toggleNew() { if (fields) fields.hidden = !sel || sel.value !== 'new'; }
+  if (sel) sel.addEventListener('change', toggleNew);
+  toggleNew();
+
+  var file = form.querySelector('[data-scan-preview]');
+  var target = form.querySelector('[data-scan-target]');
+  var lastUrl = null;
+  if (file && target) {
+    file.addEventListener('change', function () {
+      if (lastUrl) URL.revokeObjectURL(lastUrl);
+      target.textContent = '';
+      var f = file.files && file.files[0];
+      if (!f) { target.hidden = true; return; }
+      lastUrl = URL.createObjectURL(f);
+      if (/^image\/(png|jpeg|webp|gif)$/.test(f.type)) {
+        var img = document.createElement('img');
+        img.src = lastUrl;
+        img.alt = 'Scan preview';
+        target.appendChild(img);
+      } else {
+        var a = document.createElement('a');
+        a.href = lastUrl;
+        a.target = '_blank';
+        a.rel = 'noopener';
+        a.textContent = 'Open ' + f.name + ' to read along';
+        target.appendChild(a);
+      }
+      target.hidden = false;
+    });
+  }
+})();

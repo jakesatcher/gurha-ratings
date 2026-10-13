@@ -1,0 +1,60 @@
+<%- include('../partials/head') %>
+<h1>Paper forms</h1>
+<%- include('_nav') %>
+<p class="muted">For raters who'd rather not use an account: print a sheet per team, hand it out, then type the filled-in sheet back in here (attach a scan or photo as the record). Only admins can print and enter forms.</p>
+
+<section class="card" data-check-scope>
+  <h2>Print new forms · <%= season.name %></h2>
+  <% if (!teams.length) { %>
+    <p class="muted">No teams in this season yet.</p>
+  <% } else { %>
+  <form method="post" action="/admin/paper/forms" class="stack">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <label class="check"><input type="checkbox" data-check-all="team_ids"> Select all teams</label>
+    <ul class="team-pick">
+      <% teams.forEach(function (t) { %>
+        <li><label><input type="checkbox" name="team_ids" value="<%= t.id %>"> <%= t.name %> <span class="small muted"><%= t.division || '' %> · <%= t.player_count %> players</span></label></li>
+      <% }) %>
+    </ul>
+    <div class="grid-2">
+      <label>Blank write-in rows per form <input type="number" name="blank_rows" min="0" max="10" value="3"></label>
+      <label class="check"><input type="checkbox" name="guide" value="1" checked> Include the category rating guide page</label>
+    </div>
+    <p class="small muted">Each team gets its own numbered form (e.g. PF-0007) listing the whole roster, ~10 players per landscape page. Blank rows let raters add subs or anyone missing.</p>
+    <button class="btn btn-primary" type="submit">Create &amp; print</button>
+  </form>
+  <% } %>
+</section>
+
+<section class="card">
+  <h2>Forms (<%= forms.length %>)</h2>
+  <% if (!forms.length) { %><p class="muted">No paper forms for <%= season.name %> yet.</p><% } else { %>
+  <div class="table-wrap"><table class="table compact">
+    <thead><tr><th>Form</th><th>Team</th><th class="num">Players</th><th class="num">Sheets entered</th><th class="num">Ratings</th><th>Created</th><th></th></tr></thead>
+    <tbody>
+      <% forms.forEach(function (f) { %>
+        <tr>
+          <td><a href="/admin/paper/forms/<%= f.id %>"><strong><%= f.code %></strong></a></td>
+          <td><%= f.team_name || f.title %></td>
+          <td class="num"><%= f.player_ids.length %></td>
+          <td class="num"><%= f.submissions %></td>
+          <td class="num"><%= f.ratings %></td>
+          <td class="small nowrap"><%= fmtDate(f.created_at) %></td>
+          <td class="nowrap"><a href="/admin/paper/forms/<%= f.id %>/print?guide=1">Print</a> · <a href="/admin/paper/forms/<%= f.id %>/enter">Enter</a></td>
+        </tr>
+      <% }) %>
+    </tbody>
+  </table></div>
+  <% } %>
+</section>
+
+<section class="card">
+  <h2>Paper raters (<%= paperRaters.length %>)</h2>
+  <p class="small muted">Raters without an account. They're created when you enter their first sheet. If one later requests an account with the same email, their paper ratings carry over.</p>
+  <% if (paperRaters.length) { %>
+    <ul class="list">
+      <% paperRaters.forEach(function (r) { %><li><strong><%= r.name %></strong> <span class="small muted"><%= r.email || 'no email' %> · <%= r.rating_count %> rating<%= r.rating_count === 1 ? '' : 's' %></span></li><% }) %>
+    </ul>
+  <% } %>
+</section>
+<%- include('../partials/foot') %>
