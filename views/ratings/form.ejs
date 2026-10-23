@@ -11,6 +11,7 @@
 
 <section class="card form-hero">
   <h1><%= isEdit ? 'Edit rating' : 'Player rating form' %></h1>
+  <p class="rating-instruction"><strong>Ratings should reflect where you think the player is in relation to the league you're rating them in. If you feel they should be rated in a higher league for a category, rate where you think they are.</strong></p>
   <p class="muted small">Season: <strong><%= isEdit ? rating.season_name : season.name %></strong></p>
   <p class="hero-player"><strong><%= player.first_name %> <%= player.last_name %></strong>
     <span class="muted"><%= [player.jersey_number ? `#${player.jersey_number}` : null, player.team, player.division, posName[player.position], ageOf(player) ? `Age ${ageOf(player)}` : null].filter(Boolean).join(' · ') %></span></p>
@@ -101,8 +102,8 @@
       <% }) %>
     </div>
     <% if (isEdit) { %>
-      <label>Reason for admin change <small class="muted">(recorded in the audit log)</small>
-        <input name="admin_reason" maxlength="1000" value="<%= val('admin_reason') %>"></label>
+      <label>Reason for the change <small class="muted">(required; recorded in the audit log)</small>
+        <input name="admin_reason" maxlength="1000" value="<%= val('admin_reason') %>" required></label>
     <% } %>
   </fieldset>
 

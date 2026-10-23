@@ -145,11 +145,12 @@ async function loadRatings({ playerIds, ratingId, seasonId } = {}) {
   }
   const ratings = await db.many(
     `SELECT r.*, u.name AS rater_name, u.email AS rater_email, ub.name AS updated_by_name, s.name AS season_name,
-            pf.code AS paper_form_code, pf.id AS paper_form_id
+            pf.code AS paper_form_code, pf.id AS paper_form_id, dq.name AS disqualified_by_name
        FROM ratings r
        JOIN users u ON u.id = r.rater_id
        JOIN seasons s ON s.id = r.season_id
        LEFT JOIN users ub ON ub.id = r.updated_by
+       LEFT JOIN users dq ON dq.id = r.disqualified_by
        LEFT JOIN paper_submissions ps ON ps.id = r.paper_submission_id
        LEFT JOIN paper_forms pf ON pf.id = ps.form_id
       WHERE ${where.join(' AND ')}
@@ -170,6 +171,7 @@ async function loadRatings({ playerIds, ratingId, seasonId } = {}) {
     r.scoreMap = Object.fromEntries(r.scores.map((s) => [s.category_id, s]));
     // Ratings from the old 0–11 scale are shown for reference but kept out of every average.
     r.legacy = r.scale === 1;
+    r.disqualified = Boolean(r.disqualified_at);
     r.overall = weightedOverall(r.scores, categories);
     r.calculated_level = r.legacy ? null : levelForScore(r.overall);
     r.effective_level = r.final_level || r.calculated_level;
@@ -179,8 +181,9 @@ async function loadRatings({ playerIds, ratingId, seasonId } = {}) {
 
 // Aggregates a player's ratings into averages, level and review flag.
 function summarize(allRatings, categories, player = {}) {
-  const ratings = allRatings.filter((r) => !r.legacy);
-  const legacyCount = allRatings.length - ratings.length;
+  const ratings = allRatings.filter((r) => !r.legacy && !r.disqualified);
+  const legacyCount = allRatings.filter((r) => r.legacy).length;
+  const disqualifiedCount = allRatings.filter((r) => r.disqualified && !r.legacy).length;
   const count = ratings.length;
   const categoryAverages = {};
   for (const cat of categories) {
@@ -199,6 +202,7 @@ function summarize(allRatings, categories, player = {}) {
   return {
     count,
     legacyCount,
+    disqualifiedCount,
     categoryAverages,
     avgOverall,
     calculatedLevel,

@@ -625,3 +625,6 @@ h2 { text-transform: uppercase; font-weight: 600; }
   .grade .short { display: inline; }
 }
 .grade-tag { white-space: nowrap; }
+.rating-instruction { margin: .25rem 0 .6rem; }
+.dq-form { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin-top: .5rem; }
+.dq-form input[name="reason"] { flex: 1 1 16rem; }

@@ -559,6 +559,8 @@ router.post('/ratings/:id', async (req, res) => {
   const rating = ratings[0];
   if (!rating) return res.redirect('/players');
   const { errors, data, scores } = R.parseRatingForm(req.body, categories);
+  const reason = String(req.body.admin_reason || '').trim().slice(0, 1000);
+  if (!reason) errors.push('Enter a reason for changing this rating.');
   if (errors.length) {
     const player = await ratingPlayer(rating);
     return res.status(422).render('ratings/form', {
@@ -573,10 +575,47 @@ router.post('/ratings/:id', async (req, res) => {
       rater_id: rating.rater_id,
       before,
       after: { final_level: data.final_level, scores: scores.map((s) => [s.category_id, s.score]) },
-      reason: String(req.body.admin_reason || '').trim().slice(0, 1000) || null,
+      reason,
     }, c);
   });
   req.flash('success', 'Rating updated.');
+  res.redirect(`/players/${rating.player_id}#rating-${rating.id}`);
+});
+
+// Disqualify a rating that's unrealistic for the player: kept on record, left out of every average.
+router.post('/ratings/:id/disqualify', async (req, res) => {
+  const rating = await db.one('SELECT * FROM ratings WHERE id = $1', [id(req)]);
+  if (!rating) return res.redirect('/players');
+  const reason = String(req.body.reason || '').trim().slice(0, 1000);
+  if (!reason) {
+    req.flash('error', 'Enter a reason for disqualifying this rating.');
+  } else if (rating.disqualified_at) {
+    req.flash('error', 'That rating is already disqualified.');
+  } else {
+    await db.tx(async (c) => {
+      await c.query('UPDATE ratings SET disqualified_at = now(), disqualified_by = $1, disqualified_reason = $2 WHERE id = $3', [req.user.id, reason, rating.id]);
+      await audit(req.user.id, 'rating_disqualified', 'rating', rating.id, { player_id: rating.player_id, rater_id: rating.rater_id, reason }, c);
+    });
+    req.flash('success', "Rating disqualified. It no longer counts toward the player's averages.");
+  }
+  res.redirect(`/players/${rating.player_id}#rating-${rating.id}`);
+});
+
+router.post('/ratings/:id/reinstate', async (req, res) => {
+  const rating = await db.one('SELECT * FROM ratings WHERE id = $1', [id(req)]);
+  if (!rating) return res.redirect('/players');
+  const reason = String(req.body.reason || '').trim().slice(0, 1000);
+  if (!reason) {
+    req.flash('error', 'Enter a reason for reinstating this rating.');
+  } else if (rating.disqualified_at) {
+    await db.tx(async (c) => {
+      await c.query('UPDATE ratings SET disqualified_at = NULL, disqualified_by = NULL, disqualified_reason = NULL WHERE id = $1', [rating.id]);
+      await audit(req.user.id, 'rating_reinstated', 'rating', rating.id, {
+        player_id: rating.player_id, rater_id: rating.rater_id, reason, was_disqualified_for: rating.disqualified_reason,
+      }, c);
+    });
+    req.flash('success', 'Rating reinstated. It counts toward averages again.');
+  }
   res.redirect(`/players/${rating.player_id}#rating-${rating.id}`);
 });
 

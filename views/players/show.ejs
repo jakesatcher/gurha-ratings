@@ -47,6 +47,7 @@
 
 <section class="card">
   <h2><%= season ? season.name : '' %> ratings <span class="muted small">(<%= summary.count %> rating<%= summary.count === 1 ? '' : 's' %>)</span></h2>
+  <% if (summary.disqualifiedCount) { %><p class="small muted"><%= summary.disqualifiedCount %> rating<%= summary.disqualifiedCount === 1 ? ' was' : 's were' %> disqualified by an admin and <%= summary.disqualifiedCount === 1 ? "isn't" : "aren't" %> counted.</p><% } %>
   <% if (summary.legacyCount) { %><p class="small muted"><%= summary.legacyCount %> older rating<%= summary.legacyCount === 1 ? ' uses' : 's use' %> the previous 0–11 scale and <%= summary.legacyCount === 1 ? "isn't" : "aren't" %> counted.<% if (isAdmin) { %> Edit to re-score on the new scale, or delete.<% } %></p><% } %>
   <% if (!summary.count) { %>
     <p class="muted">No ratings submitted yet.</p>
@@ -122,11 +123,15 @@
           <% if (r.source === 'paper') { %><span class="tag" title="Entered from a paper form">paper<% if (currentUser.role === 'admin' && r.paper_form_id) { %> · <a href="/admin/paper/forms/<%= r.paper_form_id %>"><%= r.paper_form_code %></a><% } %></span><% } %>
           <span class="muted small">· <%= fmtDate(r.created_at) %><%= r.updated_by && r.updated_by !== r.rater_id ? ' · edited by admin' : '' %></span></span>
         <span class="rating-summary-levels">
+          <% if (r.disqualified) { %><span class="tag tag-rejected">disqualified</span><% } %>
           <% if (r.legacy) { %><span class="tag">old 0–11 scale</span><% } else { %>
           <span class="small muted"><%= fmt(r.overall) %></span>
           <%- include('../partials/level', { level: r.calculated_level }) %><% } %>
         </span>
       </summary>
+      <% if (r.disqualified) { %>
+        <div class="alert alert-warn">Disqualified<%= isAdmin && r.disqualified_by_name ? ` by ${r.disqualified_by_name}` : '' %> on <%= fmtDate(r.disqualified_at) %>. Not counted toward averages.<% if (isAdmin) { %><br><strong>Reason:</strong> <%= r.disqualified_reason %><% } %></div>
+      <% } %>
       <table class="table compact">
         <thead><tr><th>Category</th><th>Rating</th><th class="num">Points</th><th>Comments</th></tr></thead>
         <tbody>
@@ -150,12 +155,25 @@
       </dl>
       <% if (isAdmin) { %>
         <div class="actions">
-          <a class="btn btn-small" href="/admin/ratings/<%= r.id %>/edit">Edit rating</a>
+          <a class="btn btn-small" href="/admin/ratings/<%= r.id %>/edit">Change rating</a>
           <form method="post" action="/admin/ratings/<%= r.id %>/delete" class="inline" data-confirm="Delete this rating? The rater will be able to submit a new one.">
             <input type="hidden" name="_csrf" value="<%= csrfToken %>">
             <button class="btn btn-small btn-danger" type="submit">Delete</button>
           </form>
         </div>
+        <% if (r.disqualified) { %>
+          <form method="post" action="/admin/ratings/<%= r.id %>/reinstate" class="inline-form dq-form">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <input name="reason" maxlength="1000" required placeholder="Reason for reinstating (required)" aria-label="Reason for reinstating">
+            <button class="btn btn-small" type="submit">Reinstate</button>
+          </form>
+        <% } else { %>
+          <form method="post" action="/admin/ratings/<%= r.id %>/disqualify" class="inline-form dq-form" data-confirm="Disqualify this rating? It stays on record but won't count toward the player's averages.">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <input name="reason" maxlength="1000" required placeholder="Why is this rating unrealistic? (required)" aria-label="Reason for disqualifying">
+            <button class="btn btn-small btn-danger" type="submit">Disqualify</button>
+          </form>
+        <% } %>
       <% } %>
     </details>
   <% }) %>

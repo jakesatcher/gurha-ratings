@@ -554,3 +554,59 @@ test('paper forms: admin prints a multi-player sheet and enters it; paper raters
   assert.deepStrictEqual([after.id, after.can_login, after.status], [paula.id, true, 'pending']);
   assert.strictEqual((await h.db.one('SELECT count(*)::int AS n FROM ratings WHERE rater_id = $1', [paula.id])).n, 3);
 });
+
+test('admins change or disqualify ratings only with a reason; disqualified ratings are not counted', async () => {
+  await h.createUser({ email: 'dq-admin@test.com', name: 'DQ Admin', role: 'admin' });
+  const admin = await h.login(app, 'dq-admin@test.com');
+  await h.post(admin, '/admin/players', { first_name: 'Dee', last_name: 'Queue', team: 'Gulls', division: 'D2' }, '/admin/players/new');
+  const dee = await h.db.one(`SELECT id FROM players WHERE last_name = 'Queue'`);
+  await h.createUser({ email: 'dq-rater@test.com', name: 'Over Rater' });
+  const rater = await h.login(app, 'dq-rater@test.com');
+
+  const form = await rater.get(`/players/${dee.id}/rate`);
+  assert.match(form.text, /<strong>Ratings should reflect where you think the player is in relation to the league/);
+  await h.post(rater, `/players/${dee.id}/rate`, fullRating());
+  const rating = await h.db.one('SELECT id FROM ratings WHERE player_id = $1', [dee.id]);
+
+  // Changing a rating needs a reason
+  const editUrl = `/admin/ratings/${rating.id}`;
+  const noReason = await h.post(admin, editUrl, fullRating({ score_1: 'A' }), `${editUrl}/edit`);
+  assert.strictEqual(noReason.status, 422);
+  assert.match(noReason.text, /Enter a reason for changing this rating/);
+  assert.strictEqual((await h.db.one('SELECT grade FROM rating_scores WHERE rating_id = $1 AND category_id = 1', [rating.id])).grade, 'D1/C2:H');
+
+  // Raters can't disqualify
+  assert.strictEqual((await h.post(rater, `${editUrl}/disqualify`, { reason: 'x' })).status, 403);
+
+  // Disqualifying needs a reason
+  await h.post(admin, `${editUrl}/disqualify`, { reason: '  ' }, `/players/${dee.id}`);
+  assert.strictEqual((await h.db.one('SELECT disqualified_at FROM ratings WHERE id = $1', [rating.id])).disqualified_at, null);
+
+  await h.post(admin, `${editUrl}/disqualify`, { reason: 'Rated a beginner as an A player' }, `/players/${dee.id}`);
+  const dq = await h.db.one('SELECT disqualified_at, disqualified_reason FROM ratings WHERE id = $1', [rating.id]);
+  assert.ok(dq.disqualified_at);
+  assert.strictEqual(dq.disqualified_reason, 'Rated a beginner as an A player');
+  const adminView = await admin.get(`/players/${dee.id}`);
+  assert.match(adminView.text, /No ratings yet/);
+  assert.match(adminView.text, /1 rating was disqualified/);
+  assert.match(adminView.text, /Rated a beginner as an A player/);
+  assert.match(adminView.text, /Reinstate/);
+  const raterView = await rater.get(`/players/${dee.id}`);
+  assert.match(raterView.text, /disqualified/);
+  assert.doesNotMatch(raterView.text, /Rated a beginner as an A player/, 'reason is admin-only');
+  // Still counts as rated, so the rater can't just submit again
+  assert.strictEqual((await h.post(rater, `/players/${dee.id}/rate`, fullRating())).status, 409);
+
+  // Reinstating needs a reason too
+  await h.post(admin, `${editUrl}/reinstate`, { reason: '' }, `/players/${dee.id}`);
+  assert.ok((await h.db.one('SELECT disqualified_at FROM ratings WHERE id = $1', [rating.id])).disqualified_at);
+  await h.post(admin, `${editUrl}/reinstate`, { reason: 'Talked to the rater; it was a mix-up' }, `/players/${dee.id}`);
+  assert.strictEqual((await h.db.one('SELECT disqualified_at FROM ratings WHERE id = $1', [rating.id])).disqualified_at, null);
+  assert.match((await admin.get(`/players/${dee.id}`)).text, /6\.80/);
+
+  const actions = (await h.db.many(`SELECT action, details->>'reason' AS reason FROM audit_log WHERE entity = 'rating' AND entity_id = $1 AND action <> 'rating_created' ORDER BY id`, [rating.id]));
+  assert.deepStrictEqual(actions.map((a) => [a.action, a.reason]), [
+    ['rating_disqualified', 'Rated a beginner as an A player'],
+    ['rating_reinstated', 'Talked to the rater; it was a mix-up'],
+  ]);
+});
