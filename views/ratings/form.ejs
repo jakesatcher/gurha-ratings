@@ -66,7 +66,7 @@
         <div class="grade-col">
           <span class="grade-head" title="<%= b.name || b.level %>"><%= b.level %></span>
           <% steps.forEach(function (st) { const key = st ? `${b.level}:${st}` : b.level; %>
-            <label class="grade grade-<%= b.tier %>">
+            <label class="grade grade-<%= b.tier %> grade-step-<%= st || 'one' %>">
               <input type="radio" name="score_<%= c.id %>" value="<%= key %>" data-points="<%= b.points[st] %>" <%= cur === key ? 'checked' : '' %> required
                      aria-label="<%= st ? `${b.level} ${levels.STEP_NAMES[st]}` : (b.name || b.level) %>">
               <% if (st) { %><span><span class="long"><%= levels.STEP_NAMES[st] %></span><span class="short"><%= levels.STEP_SHORT[st] %></span></span><% } else { %><span>Select</span><% } %>
