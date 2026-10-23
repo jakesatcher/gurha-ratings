@@ -28,7 +28,7 @@
       <li>Complete your evaluation independently before discussing the player with other raters.</li>
     </ul>
     <p><strong>The key question:</strong> What level does this player consistently demonstrate during actual game play?</p>
-    <p>For each category pick the level the player shows, then <strong>Low</strong>, <strong>Mid</strong> or <strong>High</strong> within it. Beginner and A have no steps.</p>
+    <p>For each category pick the level the player shows, then <strong>Low</strong>, <strong>Medium</strong> or <strong>High</strong> within it. Beginner and A are a single choice.</p>
   </details>
 </section>
 
@@ -61,14 +61,15 @@
       <% } %>
     </details>
     <% } %>
-    <div class="grade-picker" role="radiogroup" aria-label="<%= c.name %> level">
+    <div class="grade-scale" role="radiogroup" aria-label="<%= c.name %> level">
       <% levels.BANDS.forEach(function (b) { const steps = Object.keys(b.points); %>
-        <div class="grade-row<%= steps.length === 1 ? ' grade-single' : '' %>">
-          <span class="level level-<%= b.tier %> grade-level"><%= b.level %></span>
+        <div class="grade-col">
+          <span class="grade-head" title="<%= b.name || b.level %>"><%= b.level %></span>
           <% steps.forEach(function (st) { const key = st ? `${b.level}:${st}` : b.level; %>
             <label class="grade grade-<%= b.tier %>">
-              <input type="radio" name="score_<%= c.id %>" value="<%= key %>" data-points="<%= b.points[st] %>" <%= cur === key ? 'checked' : '' %> required>
-              <span><%= st ? levels.STEP_NAMES[st] : (b.name || b.level) %></span>
+              <input type="radio" name="score_<%= c.id %>" value="<%= key %>" data-points="<%= b.points[st] %>" <%= cur === key ? 'checked' : '' %> required
+                     aria-label="<%= st ? `${b.level} ${levels.STEP_NAMES[st]}` : (b.name || b.level) %>">
+              <% if (st) { %><span><span class="long"><%= levels.STEP_NAMES[st] %></span><span class="short"><%= levels.STEP_SHORT[st] %></span></span><% } else { %><span>Select</span><% } %>
             </label>
           <% }) %>
         </div>

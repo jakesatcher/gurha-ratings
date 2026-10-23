@@ -1,15 +1,16 @@
 'use strict';
 
-// GURHA rating scale. Each category is rated by level, and most levels have a Low / Mid / High
+// GURHA rating scale. Each category is rated by level, and most levels have a Low / Medium / High
 // step; Beginner and A are single values. Each choice ("grade") is worth a fixed number of points,
 // and the weighted average of those points (0–15) maps back to a level.
 const MAX_POINTS = 15;
-const STEP_NAMES = { L: 'Low', M: 'Mid', H: 'High' };
+const STEP_NAMES = { L: 'Low', M: 'Medium', H: 'High' };
+const STEP_SHORT = { L: 'Low', M: 'Med', H: 'High' };
 
 const BANDS = [
   { level: 'BEG', name: 'Beginner', tier: 'beg', points: { '': 0 } },
-  { level: 'D3', tier: 'd', points: { L: 1, M: 1.5, H: 2 } },
-  { level: 'D2', tier: 'd', points: { L: 3, M: 4, H: 5 } },
+  { level: 'D3', tier: 'd3', points: { L: 1, M: 1.5, H: 2 } },
+  { level: 'D2', tier: 'd2', points: { L: 3, M: 4, H: 5 } },
   { level: 'D1/C2', tier: 'dc', points: { L: 6, M: 7, H: 8 } },
   { level: 'C1/B2', tier: 'cb', points: { L: 9, M: 10, H: 11 } },
   { level: 'B1/A2', tier: 'ba', points: { L: 12, M: 13, H: 14 } },
@@ -77,7 +78,7 @@ function levelLabel(level) {
   return (band && band.name) || level;
 }
 
-// Colour tier: beg, d, dc, cb, ba, a. Older level names (C3, B2…) fall back to their letter.
+// Colour tier: beg, d3, d2, dc, cb, ba, a. Older level names (C3, B2…) fall back to their letter.
 function levelTier(level) {
   if (!level) return 'none';
   const band = BANDS.find((b) => b.level === level);
@@ -86,6 +87,6 @@ function levelTier(level) {
 }
 
 module.exports = {
-  MAX_POINTS, STEP_NAMES, BANDS, LEVELS, GRADES, BOUNDS,
+  MAX_POINTS, STEP_NAMES, STEP_SHORT, BANDS, LEVELS, GRADES, BOUNDS,
   gradeByKey, gradeForPoints, levelForScore, levelIndex, isLevel, normalizeLevel, levelLabel, levelTier,
 };

@@ -51,7 +51,7 @@ function parseRatingForm(body, categories) {
   for (const cat of categories) {
     const grade = gradeByKey(body[`score_${cat.id}`]);
     if (!grade) {
-      errors.push(`${cat.name}: choose a level (and Low, Mid or High).`);
+      errors.push(`${cat.name}: choose a level (and Low, Medium or High).`);
       continue;
     }
     scores.push({ category_id: cat.id, grade: grade.key, score: grade.points, comment: cleanText(body[`comment_${cat.id}`], 2000) });

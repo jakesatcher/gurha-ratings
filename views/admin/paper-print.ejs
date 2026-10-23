@@ -63,7 +63,7 @@
 
   <footer class="legend">
     <table class="scale-key"><tr><th>Write the points</th><% levels.BANDS.forEach(function (b) { %><th><%= b.level %></th><% }) %></tr>
-      <tr><td>Low / Mid / High</td><% levels.BANDS.forEach(function (b) { %><td><%= Object.values(b.points).join(' / ') %></td><% }) %></tr></table>
+      <tr><td>Low / Medium / High</td><% levels.BANDS.forEach(function (b) { %><td><%= Object.values(b.points).join(' / ') %></td><% }) %></tr></table>
     <p>For each category pick the level the player shows and whether they're low, mid or high in it, and write that number (Beginner 0, A 15).
       <strong>Recommend:</strong> the level you'd place the player at (<%= levels.LEVELS.join(', ') %>).
       Rate what you see, not what you think. Leave a row blank if you haven't seen the player.

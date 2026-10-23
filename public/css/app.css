@@ -547,30 +547,75 @@ h2 { text-transform: uppercase; font-weight: 600; }
 .team-pick li { padding: .2rem 0; break-inside: avoid; }
 [hidden] { display: none !important; }
 
-/* ---------- Level / Low-Mid-High grade picker ---------- */
-:root { --tier-dc: linear-gradient(135deg, var(--tier-d) 50%, var(--tier-c) 50%); --tier-cb: linear-gradient(135deg, var(--tier-c) 50%, var(--tier-b) 50%); --tier-ba: linear-gradient(135deg, var(--tier-b) 50%, var(--tier-a) 50%); }
-.level-dc { background: var(--tier-dc); }
-.level-cb { background: var(--tier-cb); }
-.level-ba { background: var(--tier-ba); }
-.level-chip.level-dc, .level-chip.level-cb, .level-chip.level-ba { background: none; min-width: 0; padding: 0; color: inherit; font-size: inherit; }
-.level-chip.level-dc input:checked + span { background: var(--tier-dc); border-color: var(--tier-c); color: #fff; }
-.level-chip.level-cb input:checked + span { background: var(--tier-cb); border-color: var(--tier-b); color: #fff; }
-.level-chip.level-ba input:checked + span { background: var(--tier-ba); border-color: var(--tier-a); color: #fff; }
+/* ---------- Rating scale: Beginner (red) → A (green) ---------- */
+:root {
+  --lvl-beg: hsl(0, 72%, 45%);
+  --lvl-d3: hsl(20, 85%, 44%);
+  --lvl-d2: hsl(36, 90%, 39%);
+  --lvl-dc: hsl(50, 85%, 33%);
+  --lvl-cb: hsl(82, 70%, 31%);
+  --lvl-ba: hsl(128, 60%, 31%);
+  --lvl-a: hsl(158, 80%, 25%);
+  --lvl-gradient: var(--lvl-beg), var(--lvl-d3), var(--lvl-d2), var(--lvl-dc), var(--lvl-cb), var(--lvl-ba), var(--lvl-a);
+}
+.level-beg { background: var(--lvl-beg); }
+.level-d3 { background: var(--lvl-d3); }
+.level-d2 { background: var(--lvl-d2); }
+.level-dc { background: var(--lvl-dc); }
+.level-cb { background: var(--lvl-cb); }
+.level-ba { background: var(--lvl-ba); }
+.level-a { background: var(--lvl-a); }
+.level-chip.level-beg, .level-chip.level-d3, .level-chip.level-d2, .level-chip.level-dc, .level-chip.level-cb, .level-chip.level-ba, .level-chip.level-a { background: none; min-width: 0; padding: 0; color: inherit; font-size: inherit; }
+.level-chip.level-beg input:checked + span { background: var(--lvl-beg); border-color: var(--lvl-beg); color: #fff; }
+.level-chip.level-d3 input:checked + span { background: var(--lvl-d3); border-color: var(--lvl-d3); color: #fff; }
+.level-chip.level-d2 input:checked + span { background: var(--lvl-d2); border-color: var(--lvl-d2); color: #fff; }
+.level-chip.level-dc input:checked + span { background: var(--lvl-dc); border-color: var(--lvl-dc); color: #fff; }
+.level-chip.level-cb input:checked + span { background: var(--lvl-cb); border-color: var(--lvl-cb); color: #fff; }
+.level-chip.level-ba input:checked + span { background: var(--lvl-ba); border-color: var(--lvl-ba); color: #fff; }
+.level-chip.level-a input:checked + span { background: var(--lvl-a); border-color: var(--lvl-a); color: #fff; }
 .level-picker { grid-template-columns: repeat(4, 1fr); }
 @media (min-width: 640px) { .level-picker { grid-template-columns: repeat(7, 1fr); } }
 
-.grade-picker { display: grid; gap: .35rem; margin: .5rem 0 .85rem; }
-.grade-row { display: grid; grid-template-columns: 4.6rem repeat(3, 1fr); gap: .35rem; align-items: stretch; }
-.grade-row.grade-single .grade { grid-column: 2 / span 3; }
-.grade-level { min-width: 0; font-size: .85rem; border-radius: 10px; }
-.grade { margin: 0; position: relative; }
-.grade input { position: absolute; opacity: 0; inset: 0; margin: 0; }
-.grade span { display: flex; align-items: center; justify-content: center; min-height: 44px; padding: .3rem; border: 2px solid var(--border); border-radius: 10px; background: var(--surface-2); font-weight: 700; cursor: pointer; text-align: center; }
+/* Horizontal scale: one column per level, level name on top, Low / Medium / High below. The header
+   row is one continuous gradient sliced across the columns. */
+.grade-scale { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; margin: .6rem 0 .9rem; }
+.grade-col { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.grade-head {
+  display: flex; align-items: center; justify-content: center; min-height: 2.4rem; padding: .2rem .1rem;
+  color: #fff; font-weight: 800; font-size: .95rem; letter-spacing: .02em; text-align: center; line-height: 1.1;
+  background: linear-gradient(90deg, var(--lvl-gradient)); background-size: 700% 100%;
+}
+.grade-col:first-child .grade-head { border-radius: 10px 0 0 10px; }
+.grade-col:last-child .grade-head { border-radius: 0 10px 10px 0; }
+.grade-col:nth-child(1) .grade-head { background-position: 0% 0; }
+.grade-col:nth-child(2) .grade-head { background-position: 16.667% 0; }
+.grade-col:nth-child(3) .grade-head { background-position: 33.333% 0; }
+.grade-col:nth-child(4) .grade-head { background-position: 50% 0; }
+.grade-col:nth-child(5) .grade-head { background-position: 66.667% 0; }
+.grade-col:nth-child(6) .grade-head { background-position: 83.333% 0; }
+.grade-col:nth-child(7) .grade-head { background-position: 100% 0; }
+.grade { margin: 0; position: relative; display: flex; flex: 1; }
+.grade input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.grade > span {
+  display: flex; flex: 1; align-items: center; justify-content: center; min-height: 44px; padding: .2rem;
+  border: 2px solid var(--border); border-radius: 8px; background: var(--surface-2);
+  font-weight: 700; font-size: .9rem; cursor: pointer; text-align: center; transition: background .12s, color .12s;
+}
+.grade > span:hover { border-color: var(--grade-color); }
 .grade input:focus-visible + span { outline: 3px solid var(--accent); outline-offset: 2px; }
-.grade-beg input:checked + span { background: var(--tier-beg); border-color: var(--tier-beg); color: #fff; }
-.grade-d input:checked + span { background: var(--tier-d); border-color: var(--tier-d); color: #fff; }
-.grade-dc input:checked + span { background: var(--tier-dc); border-color: var(--tier-c); color: #fff; }
-.grade-cb input:checked + span { background: var(--tier-cb); border-color: var(--tier-b); color: #fff; }
-.grade-ba input:checked + span { background: var(--tier-ba); border-color: var(--tier-a); color: #fff; }
-.grade-a input:checked + span { background: var(--tier-a); border-color: var(--tier-a); color: #fff; }
+.grade input:checked + span { background: var(--grade-color); border-color: var(--grade-color); color: #fff; box-shadow: 0 2px 6px rgba(15, 23, 42, .25); }
+.grade-beg { --grade-color: var(--lvl-beg); }
+.grade-d3 { --grade-color: var(--lvl-d3); }
+.grade-d2 { --grade-color: var(--lvl-d2); }
+.grade-dc { --grade-color: var(--lvl-dc); }
+.grade-cb { --grade-color: var(--lvl-cb); }
+.grade-ba { --grade-color: var(--lvl-ba); }
+.grade-a { --grade-color: var(--lvl-a); }
+.grade .short { display: none; }
+@media (max-width: 640px) {
+  .grade-head { font-size: .7rem; min-height: 2.2rem; }
+  .grade > span { font-size: .72rem; padding: .15rem 0; border-radius: 6px; }
+  .grade .long { display: none; }
+  .grade .short { display: inline; }
+}
 .grade-tag { white-space: nowrap; }
