@@ -47,9 +47,19 @@ function gradeForPoints(points) {
   return GRADES.find((g) => g.points === n) || null;
 }
 
+// Standard rounding (halves round up) to `places` decimals. The tiny nudge absorbs floating-point
+// error, so a weighted average that is mathematically 2.5 but computes as 2.4999999… still rounds up.
+function roundHalfUp(value, places = 0) {
+  const f = 10 ** places;
+  return Math.round(Number(value) * f + 1e-9) / f;
+}
+
+// Aggregate score → level: round to the nearest whole point (2.4 → 2 = D3, 2.5 → 3 = D2), then find
+// the level that point value belongs to.
 function levelForScore(score) {
   if (score === null || score === undefined || score === '' || Number.isNaN(Number(score))) return null;
-  return BOUNDS.find((b) => Number(score) < b.upper).level;
+  const points = roundHalfUp(score);
+  return BOUNDS.find((b) => points < b.upper).level;
 }
 
 function levelIndex(level) {
@@ -88,5 +98,5 @@ function levelTier(level) {
 
 module.exports = {
   MAX_POINTS, STEP_NAMES, STEP_SHORT, BANDS, LEVELS, GRADES, BOUNDS,
-  gradeByKey, gradeForPoints, levelForScore, levelIndex, isLevel, normalizeLevel, levelLabel, levelTier,
+  roundHalfUp, gradeByKey, gradeForPoints, levelForScore, levelIndex, isLevel, normalizeLevel, levelLabel, levelTier,
 };

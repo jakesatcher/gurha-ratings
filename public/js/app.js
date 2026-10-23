@@ -49,8 +49,10 @@
       if (fs) fs.classList.toggle('answered', !!checked);
       if (checked) { total += Number(checked.getAttribute('data-points')) * c.w; wsum += c.w; answered++; }
     });
-    var score = wsum ? Math.round((total / wsum) * 100) / 100 : null;
-    var band = score === null ? null : bounds.filter(function (b) { return b.upper === null || score < b.upper; })[0];
+    // Same rounding as the server: halves round up, nudged past floating-point error.
+    var score = wsum ? Math.round((total / wsum) * 100 + 1e-9) / 100 : null;
+    var points = score === null ? null : Math.round(score + 1e-9);
+    var band = score === null ? null : bounds.filter(function (b) { return b.upper === null || points < b.upper; })[0];
     var text = score === null ? '—' : score.toFixed(2) + (answered < weights.length ? '*' : '');
     ['calc-score', 'bar-score'].forEach(function (id) { var el = document.getElementById(id); if (el) el.textContent = text; });
     setLevel(document.getElementById('calc-level'), band);
@@ -175,8 +177,9 @@
     var out = tr.querySelector('[data-overall]');
     if (!out) return;
     if (filled !== weights.length) { out.textContent = filled ? '…' : '—'; return; }
-    var score = sum / totalW;
-    var lvl = bounds.filter(function (b) { return b.upper === null || score < b.upper; })[0].level;
+    var score = Math.round((sum / totalW) * 100 + 1e-9) / 100;
+    var points = Math.round(score + 1e-9);
+    var lvl = bounds.filter(function (b) { return b.upper === null || points < b.upper; })[0].level;
     out.textContent = score.toFixed(2) + ' · ' + lvl;
   }
   form.querySelectorAll('[data-paper-row]').forEach(function (tr) {

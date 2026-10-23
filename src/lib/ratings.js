@@ -1,7 +1,7 @@
 'use strict';
 
 const db = require('../db');
-const { levelForScore, levelIndex, isLevel, gradeByKey, LEVELS, MAX_POINTS } = require('./levels');
+const { levelForScore, levelIndex, isLevel, gradeByKey, roundHalfUp, LEVELS, MAX_POINTS } = require('./levels');
 
 const ALREADY_RATED_MESSAGE =
   'You already rated this player. If you feel this is an error, or would like to change your rating, please contact an Admin';
@@ -28,7 +28,7 @@ function weightedOverall(scores, categories) {
     weightSum += w;
   }
   if (weightSum === 0) return null;
-  return Math.round((total / weightSum) * 100) / 100;
+  return roundHalfUp(total / weightSum, 2);
 }
 
 function toArray(v) {
@@ -188,17 +188,17 @@ function summarize(allRatings, categories, player = {}) {
   const categoryAverages = {};
   for (const cat of categories) {
     const vals = ratings.map((r) => r.scoreMap[cat.id]).filter(Boolean).map((s) => s.score);
-    categoryAverages[cat.id] = vals.length ? Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 100) / 100 : null;
+    categoryAverages[cat.id] = vals.length ? roundHalfUp(vals.reduce((a, b) => a + b, 0) / vals.length, 2) : null;
   }
   const overalls = ratings.map((r) => r.overall).filter((v) => v !== null);
-  const avgOverall = overalls.length ? Math.round((overalls.reduce((a, b) => a + b, 0) / overalls.length) * 100) / 100 : null;
+  const avgOverall = overalls.length ? roundHalfUp(overalls.reduce((a, b) => a + b, 0) / overalls.length, 2) : null;
 
   const finalIdx = ratings.map((r) => levelIndex(r.effective_level)).filter((v) => v !== null);
   const avgFinalIdx = finalIdx.length ? finalIdx.reduce((a, b) => a + b, 0) / finalIdx.length : null;
   const levelSpread = finalIdx.length > 1 ? Math.max(...finalIdx) - Math.min(...finalIdx) : 0;
 
   const calculatedLevel = levelForScore(avgOverall);
-  const recommendedLevel = avgFinalIdx === null ? null : LEVELS[Math.round(avgFinalIdx)];
+  const recommendedLevel = avgFinalIdx === null ? null : LEVELS[roundHalfUp(avgFinalIdx)];
   return {
     count,
     legacyCount,

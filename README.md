@@ -67,7 +67,7 @@ Raters rate each category by level, then **Low / Mid / High** within it. Each ch
 | A | 15 | | |
 
 - **Rating overall** = Σ(points × weight) ÷ Σ(weights), 0–15. With the default weights: `(Skating × .25) + (Puck × .20) + (Passing × .15) + (Shooting × .10) + (IQ × .20) + (Execution × .10)`.
-- **Calculated level** = the level whose points the overall is closest to (BEG < 0.5, D3 < 2.5, D2 < 5.5, D1/C2 < 8.5, C1/B2 < 11.5, B1/A2 < 14.5, else A).
+- **Calculated level**: round the overall to the nearest whole point using standard rounding (.5 and up rounds up, so 2.4 → 2 = D3 and 2.5 → 3 = D2), then take the level that point value belongs to (0 BEG, 1–2 D3, 3–5 D2, 6–8 D1/C2, 9–11 C1/B2, 12–14 B1/A2, 15 A). Displayed scores are rounded to 2 decimals the same way.
 - **Player final rating** (per season) = the average of all raters' overall scores that season. The player's level comes from that average, unless an admin set an override for that season.
 - **Rater recommendation** = each rater's recommended level (no points; for admins to review). The player page shows their average.
 - **3rd review flag**: raters' recommended levels differ by ≥ 2 levels.

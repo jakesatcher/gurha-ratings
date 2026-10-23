@@ -3,7 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const totp = require('../src/lib/totp');
-const { levelForScore, gradeForPoints, normalizeLevel, LEVELS, GRADES } = require('../src/lib/levels');
+const { levelForScore, roundHalfUp, gradeForPoints, normalizeLevel, LEVELS, GRADES } = require('../src/lib/levels');
 const { weightedOverall, summarize, parseRatingForm } = require('../src/lib/ratings');
 const { normalizePlayer, parseUpload } = require('../src/lib/players');
 const { extractPlayers } = require('../src/lib/sportsengine');
@@ -31,6 +31,16 @@ test('levels: Low/Mid/High grades carry the agreed points and scores map back to
   assert.strictEqual(levelForScore(2.5), 'D2');
   assert.strictEqual(levelForScore(6.8), 'D1/C2');
   assert.strictEqual(levelForScore(14.5), 'A');
+  // Standard rounding at every boundary: x.4 stays, x.5 rounds up
+  for (const [lo, hi, below, above] of [[0.4, 0.5, 'BEG', 'D3'], [2.4, 2.5, 'D3', 'D2'], [5.4, 5.5, 'D2', 'D1/C2'], [8.4, 8.5, 'D1/C2', 'C1/B2'], [11.4, 11.5, 'C1/B2', 'B1/A2'], [14.4, 14.5, 'B1/A2', 'A']]) {
+    assert.strictEqual(levelForScore(lo), below, `${lo}`);
+    assert.strictEqual(levelForScore(hi), above, `${hi}`);
+  }
+  // Floating-point error doesn't push an exact half down
+  assert.strictEqual(roundHalfUp(2.4999999999999996), 3);
+  assert.strictEqual(roundHalfUp(1.005, 2), 1.01);
+  assert.strictEqual(levelForScore(0.1 * 3 + 2.2), 'D2'); // 2.5000000000000004
+  assert.strictEqual(levelForScore((1 * 25 + 4 * 25 + 2 * 25 + 3 * 25) / 100), 'D2'); // exactly 2.5
   assert.strictEqual(levelForScore(null), null);
   assert.strictEqual(gradeForPoints('1.5').key, 'D3:M');
   assert.strictEqual(gradeForPoints('2.5'), null);
