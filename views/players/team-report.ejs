@@ -27,7 +27,7 @@
   </div>
   <div class="table-wrap">
   <table class="table">
-    <thead><tr><th>#</th><th>Jersey</th><th>Player name</th><th class="num">Final rating 0–11</th><th>GURHA level</th><th class="num">Raters</th></tr></thead>
+    <thead><tr><th>#</th><th>Jersey</th><th>Player name</th><th class="num">Final rating 0–<%= levels.MAX_POINTS %></th><th>GURHA level</th><th class="num">Raters</th></tr></thead>
     <tbody>
       <% players.forEach(function (p, i) { const s = summaries.get(p.id); %>
         <tr>
@@ -45,7 +45,7 @@
   <p class="small muted">* Final level set by an admin. Final rating is the average weighted score across all raters. A player on several teams (e.g. as a sub) has one rating per season, shown on each team.</p>
   <h3>Individual GURHA rating scale</h3>
   <div class="scale">
-    <% levels.LEVELS.forEach(function (l, i) { %><div><span class="muted small"><%= i %></span> <%- include('../partials/level', { level: l }) %></div><% }) %>
+    <% levels.BANDS.forEach(function (b) { %><div><%- include('../partials/level', { level: b.level }) %> <span class="muted small"><%= Object.entries(b.points).map(([st, pts]) => st ? `${levels.STEP_NAMES[st]} ${pts}` : pts).join(' · ') %></span></div><% }) %>
   </div>
 </section>
 <% } %>

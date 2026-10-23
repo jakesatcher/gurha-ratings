@@ -5,11 +5,10 @@
 // optionally attaching the scan/photo of the sheet as the record.
 const db = require('../db');
 const R = require('./ratings');
-const { isLevel } = require('./levels');
+const L = require('./levels');
 
 const ROWS_PER_PAGE = 10;
 const MAX_SCAN_BYTES = 10 * 1024 * 1024;
-const GAME_PERFORMANCE = { C: 'consistently', U: 'usually', S: 'sometimes', R: 'rarely' };
 
 // Identify scans by their first bytes rather than trusting the browser-supplied type.
 function sniffScan(buf) {
@@ -63,8 +62,9 @@ async function loadForm(id) {
   return form;
 }
 
-// Reads the entry grid. Row fields: r{i}_player (write-in rows), r{i}_s{categoryId}, r{i}_ind,
-// r{i}_gp (C/U/S/R), r{i}_final, r{i}_notes. Blank rows are skipped; partly filled rows are errors.
+// Reads the entry grid. Row fields: r{i}_player (write-in rows), r{i}_s{categoryId} (the points the
+// rater wrote: 0, 1, 1.5, 2, 3 … 15), r{i}_rec (recommended level), r{i}_notes. Blank rows are
+// skipped; partly filled rows are errors.
 function parseGrid(body, form) {
   const rows = [];
   const errors = [];
@@ -72,7 +72,7 @@ function parseGrid(body, form) {
   for (let i = 0; i < form.rowCount; i++) {
     const printed = form.players[i] || null;
     const get = (k) => String(body[`r${i}_${k}`] ?? '').trim();
-    const fields = [...form.categories.map((c) => get(`s${c.id}`)), get('ind'), get('gp'), get('final'), get('notes')];
+    const fields = [...form.categories.map((c) => get(`s${c.id}`)), get('rec'), get('notes')];
     const writeIn = printed ? null : Number(get('player')) || null;
     if (!fields.some(Boolean) && !writeIn) continue; // untouched row
     const label = printed ? `Row ${i + 1} (${printed.first_name} ${printed.last_name})` : `Row ${i + 1} (write-in)`;
@@ -86,22 +86,21 @@ function parseGrid(body, form) {
       continue;
     }
     seen.add(playerId);
-    const gp = GAME_PERFORMANCE[get('gp').toUpperCase()] || get('gp').toLowerCase();
-    const notes = get('notes');
-    const formBody = {
-      independent_level: get('ind').toUpperCase(),
-      game_performance: gp,
-      final_level: get('final').toUpperCase(),
-      evidence: notes,
-      // On paper the notes column doubles as the "Sometimes/Rarely" explanation.
-      game_performance_note: ['sometimes', 'rarely'].includes(gp) ? notes : '',
-    };
-    for (const c of form.categories) formBody[`score_${c.id}`] = get(`s${c.id}`);
+    const rowErrors = [];
+    const formBody = { evidence: get('notes'), final_level: L.normalizeLevel(get('rec')) || '' };
+    for (const c of form.categories) {
+      const raw = get(`s${c.id}`);
+      const grade = raw === '' ? null : L.gradeForPoints(raw);
+      if (raw !== '' && !grade) rowErrors.push(`${c.name}: "${raw}" isn't a scale value (0, 1, 1.5, 2, 3–15).`);
+      formBody[`score_${c.id}`] = grade ? grade.key : '';
+    }
+    if (get('rec') && !formBody.final_level) rowErrors.push(`Recommendation "${get('rec')}" isn't a GURHA level.`);
     const parsed = R.parseRatingForm(formBody, form.categories);
-    if (formBody.independent_level && !isLevel(formBody.independent_level)) parsed.errors.unshift(`Independent level "${get('ind')}" isn't a GURHA level.`);
-    if (formBody.final_level && !isLevel(formBody.final_level)) parsed.errors.unshift(`Final level "${get('final')}" isn't a GURHA level.`);
-    if (parsed.errors.length) {
-      errors.push(`${label}: ${[...new Set(parsed.errors)].join(' ')}`);
+    // Don't repeat "choose a level" for a cell already reported as unreadable.
+    const said = new Set(rowErrors.map((e) => e.split(':')[0].split(' "')[0]));
+    const all = [...rowErrors, ...parsed.errors.filter((e) => !said.has(e.split(':')[0]) && !(said.has('Recommendation') && /recommendation/i.test(e)))];
+    if (all.length) {
+      errors.push(`${label}: ${[...new Set(all)].join(' ')}`);
       continue;
     }
     rows.push({ index: i, playerId, data: parsed.data, scores: parsed.scores });
@@ -109,4 +108,4 @@ function parseGrid(body, form) {
   return { rows, errors };
 }
 
-module.exports = { ROWS_PER_PAGE, MAX_SCAN_BYTES, GAME_PERFORMANCE, sniffScan, createForm, loadForm, parseGrid };
+module.exports = { ROWS_PER_PAGE, MAX_SCAN_BYTES, sniffScan, createForm, loadForm, parseGrid };

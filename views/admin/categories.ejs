@@ -8,11 +8,9 @@
 <% const catForm = function (c) { const isNew = !c.id; %>
   <form method="post" action="<%= isNew ? '/admin/categories' : `/admin/categories/${c.id}` %>" class="stack">
     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-    <div class="grid-4">
+    <div class="grid-2">
       <label>Name <input name="name" value="<%= c.name || '' %>" required maxlength="100"></label>
       <label>Weight % <input name="weight" type="number" step="0.01" min="0" max="100" value="<%= c.weight !== undefined ? Number(c.weight) : '' %>" required></label>
-      <label>Min score <input name="min_score" type="number" value="<%= c.min_score ?? 0 %>" required></label>
-      <label>Max score <input name="max_score" type="number" value="<%= c.max_score ?? 11 %>" required></label>
     </div>
     <label>Key question <input name="key_question" value="<%= c.key_question || '' %>"></label>
     <label>Note <input name="note" value="<%= c.note || '' %>"></label>
@@ -29,7 +27,7 @@
 <% } %>
 <% categories.forEach(function (c) { %>
   <details class="card">
-    <summary><strong><%= c.name %></strong> <span class="muted">· <%= Number(c.weight) %>% · <%= c.min_score %>–<%= c.max_score %></span><% if (!c.active) { %> <span class="tag">inactive</span><% } %></summary>
+    <summary><strong><%= c.name %></strong> <span class="muted">· <%= Number(c.weight) %>%</span><% if (!c.active) { %> <span class="tag">inactive</span><% } %></summary>
     <% catForm(c) %>
   </details>
 <% }) %>

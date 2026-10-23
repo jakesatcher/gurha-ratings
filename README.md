@@ -2,7 +2,7 @@
 
 Player rating system for GURHA Recreational Hockey, at **https://robertmagnusmissesthe.net**.
 
-Approved raters search for players and score them using the official **GURHA Player Rating Form**. The app averages every rater's scores into a weighted overall score (0–11) and a GURHA level (BEG → A1).
+Approved raters search for players and score them using the official **GURHA Player Rating Form**. The app averages every rater's scores into a weighted overall score (0–15) and a GURHA level (BEG → A).
 
 ## Features
 
@@ -26,7 +26,7 @@ People choose **Rater** or **Viewer** when they request access. The admin alert 
 - Request access. An admin must approve the request before the rater can sign in.
 - Two-step verification at every sign-in: an **authenticator app** (TOTP) or **email codes**.
 - Search players by name, team, division or jersey #. Filter by team, position, "not rated by me" or "needs 3rd review".
-- Rate a player on the six weighted categories, scored 0–11:
+- Rate a player on the six weighted categories, each by level plus Low / Mid / High (see *How scores are calculated*):
 
   | Category | Weight |
   |---|---|
@@ -37,7 +37,7 @@ People choose **Rater** or **Viewer** when they request access. The admin alert 
   | Hockey IQ / Awareness | 20% |
   | Game Execution | 10% |
 
-  The form also includes the independent level assessment, game performance check, age and injury sections, evidence, strengths, areas to improve, and the final recommended level. The overall score and level update live as you score.
+  The form also has optional per-category comments, **Observation notes**, and a **Rater recommendation** (a level, no points). The overall score and level update live as you score.
 - **One rating per player per rater, per season.** This is enforced in the database. Submitting again in the same season shows:
   > You already rated this player. If you feel this is an error, or would like to change your rating, please contact an Admin
 - View submitted ratings and averages. Other raters show as "Rater 1", "Rater 2" by default.
@@ -54,11 +54,26 @@ People choose **Rater** or **Viewer** when they request access. The admin alert 
 
 ## How scores are calculated
 
-- **Rating overall** = Σ(score × weight) ÷ Σ(weights). With the default weights this is exactly the form's formula: `(Skating × .25) + (Puck × .20) + (Passing × .15) + (Shooting × .10) + (IQ × .20) + (Execution × .10)`.
-- **Calculated level** = the overall score rounded to the nearest whole number, mapped as 0=BEG, 1=D3 … 11=A1.
+Raters rate each category by level, then **Low / Mid / High** within it. Each choice is worth fixed points:
+
+| Level | Low | Mid | High |
+|---|---|---|---|
+| BEG (Beginner) | 0 | | |
+| D3 | 1 | 1.5 | 2 |
+| D2 | 3 | 4 | 5 |
+| D1/C2 | 6 | 7 | 8 |
+| C1/B2 | 9 | 10 | 11 |
+| B1/A2 | 12 | 13 | 14 |
+| A | 15 | | |
+
+- **Rating overall** = Σ(points × weight) ÷ Σ(weights), 0–15. With the default weights: `(Skating × .25) + (Puck × .20) + (Passing × .15) + (Shooting × .10) + (IQ × .20) + (Execution × .10)`.
+- **Calculated level** = the level whose points the overall is closest to (BEG < 0.5, D3 < 2.5, D2 < 5.5, D1/C2 < 8.5, C1/B2 < 11.5, B1/A2 < 14.5, else A).
 - **Player final rating** (per season) = the average of all raters' overall scores that season. The player's level comes from that average, unless an admin set an override for that season.
-- **Raters' recommended** = the average of each rater's *final recommended level*.
-- **3rd review flag**: raters' final recommended levels differ by ≥ 2 steps.
+- **Rater recommendation** = each rater's recommended level (no points; for admins to review). The player page shows their average.
+- **3rd review flag**: raters' recommended levels differ by ≥ 2 levels.
+- Ratings made on the old 0–11 scale are still shown (tagged "old 0–11 scale") but don't count toward any average. An admin can edit one to re-score it on the new scale, or delete it so the rater can rate again.
+
+The form also has an optional comment per category and one **Observation notes** box.
 
 ## Deploying on Railway
 
@@ -175,8 +190,8 @@ After upload, the review page shows every row's match (**Existing**, **New**, **
 For raters who'd rather not create an account. **Admin → Paper forms** (or **Print paper form** on a team page):
 
 1. **Print.** Pick one or more teams; each gets a numbered form (e.g. `PF-0007`) listing the whole roster, about 10 players per landscape Letter page, with a few blank write-in rows and an optional rating-guide page. Each page carries the form code and page number so scans can be matched up.
-2. **Fill in.** Raters write their name, a 0–11 score per category, their independent level, game play (circle C/U/S/R), final level and notes. Blank rows are fine; they're skipped.
-3. **Enter.** Only admins can enter sheets. Open the form → **Enter a filled-in sheet**, choose the rater (or create a *paper rater* by name, optional email), optionally attach the scan or photo (PDF, JPEG, PNG, WebP, HEIC; 10 MB max), and type the grid in. Overall scores calculate as you type. Partly filled rows are rejected with a row-by-row list; "Sometimes"/"Rarely" need notes.
+2. **Fill in.** Raters write their name, the points for each category (from the scale key on the sheet: e.g. D2 Mid = 4), a recommended level and observation notes. Blank rows are fine; they're skipped.
+3. **Enter.** Only admins can enter sheets. Open the form → **Enter a filled-in sheet**, choose the rater (or create a *paper rater* by name, optional email), optionally attach the scan or photo (PDF, JPEG, PNG, WebP, HEIC; 10 MB max), and type the grid in. Overall scores calculate as you type. Partly filled rows and numbers that aren't on the scale are rejected with a row-by-row list.
 
 Paper ratings follow the same once-per-season rule: if that rater already rated a player (online or on another sheet), the row is skipped and reported, and the existing rating stays (admins can edit it from the player page). Ratings show a **paper** tag (admins see the form code). Scans are stored in the database and only admins can view them.
 

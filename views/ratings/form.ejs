@@ -6,7 +6,6 @@
   const has = (k, item) => { const x = v[k]; return Array.isArray(x) ? x.includes(item) : x === item; };
   const posName = { F: 'Forward', D: 'Defense', G: 'Goaltender' };
   const action = isEdit ? `/admin/ratings/${rating.id}` : `/players/${player.id}/rate`;
-  const tierFor = (n) => n <= 0 ? 'beg' : n <= 3 ? 'd' : n <= 6 ? 'c' : n <= 9 ? 'b' : 'a';
 %>
 <p class="crumbs"><a href="/players/<%= player.id %>">← <%= player.first_name %> <%= player.last_name %></a></p>
 
@@ -29,6 +28,7 @@
       <li>Complete your evaluation independently before discussing the player with other raters.</li>
     </ul>
     <p><strong>The key question:</strong> What level does this player consistently demonstrate during actual game play?</p>
+    <p>For each category pick the level the player shows, then <strong>Low</strong>, <strong>Mid</strong> or <strong>High</strong> within it. Beginner and A have no steps.</p>
   </details>
 </section>
 
@@ -36,9 +36,12 @@
 
 <form method="post" action="<%= action %>" class="rating-form" id="rating-form" novalidate
       data-weights='<%= JSON.stringify(categories.map(c => ({ id: c.id, w: Number(c.weight) }))) %>'
-      data-levels='<%= JSON.stringify(levels.LEVELS) %>'>
+      data-bounds='<%= JSON.stringify(levels.BOUNDS.map(b => ({ level: b.level, tier: b.tier, upper: b.upper === Infinity ? null : b.upper }))) %>'>
   <input type="hidden" name="_csrf" value="<%= csrfToken %>">
   <% if (!isEdit) { %><input type="hidden" name="season_id" value="<%= season.id %>"><% } %>
+  <% if (isEdit && rating.legacy) { %>
+    <div class="alert alert-info">This rating was made on the old 0–11 scale (old scores: <%= categories.map(c => `${c.name} ${rating.scoreMap[c.id] ? rating.scoreMap[c.id].score : '—'}`).join(', ') %>). Saving re-scores it on the new scale so it counts toward averages again.</div>
+  <% } %>
 
   <% categories.forEach(function (c, idx) { const cur = String(val(`score_${c.id}`)); %>
   <fieldset class="card category" id="cat-<%= c.id %>">
@@ -53,107 +56,45 @@
       <% } %>
       <% if (c.guide.length) { %>
         <dl class="guide"><% c.guide.forEach(function (g) { %>
-          <dt><span class="range"><%= g.range %></span> <%= g.label %></dt><dd><%= g.text %></dd>
+          <dt><%= g.label %></dt><dd><%= g.text %></dd>
         <% }) %></dl>
       <% } %>
     </details>
     <% } %>
-    <div class="score-picker" role="radiogroup" aria-label="<%= c.name %> score">
-      <% for (let n = c.min_score; n <= c.max_score; n++) { %>
-        <label class="score score-<%= tierFor(n) %>">
-          <input type="radio" name="score_<%= c.id %>" value="<%= n %>" <%= cur === String(n) ? 'checked' : '' %> required>
-          <span><%= n %></span>
-        </label>
-      <% } %>
+    <div class="grade-picker" role="radiogroup" aria-label="<%= c.name %> level">
+      <% levels.BANDS.forEach(function (b) { const steps = Object.keys(b.points); %>
+        <div class="grade-row<%= steps.length === 1 ? ' grade-single' : '' %>">
+          <span class="level level-<%= b.tier %> grade-level"><%= b.level %></span>
+          <% steps.forEach(function (st) { const key = st ? `${b.level}:${st}` : b.level; %>
+            <label class="grade grade-<%= b.tier %>">
+              <input type="radio" name="score_<%= c.id %>" value="<%= key %>" data-points="<%= b.points[st] %>" <%= cur === key ? 'checked' : '' %> required>
+              <span><%= st ? levels.STEP_NAMES[st] : (b.name || b.level) %></span>
+            </label>
+          <% }) %>
+        </div>
+      <% }) %>
     </div>
-    <div class="score-legend small muted"><span>D 0–3</span><span>C 4–6</span><span>B 7–9</span><span>A 10–11</span></div>
-    <label class="comment-label">Evidence / comments <small class="muted">(optional)</small>
+    <label class="comment-label">Comments <small class="muted">(optional)</small>
       <textarea name="comment_<%= c.id %>" rows="2" maxlength="2000"><%= val(`comment_${c.id}`) %></textarea></label>
   </fieldset>
   <% }) %>
 
   <section class="card">
     <h2>Overall score</h2>
-    <p class="calc">Calculated overall: <strong id="calc-score">—</strong> / 11 → <span id="calc-level" class="level level-none">—</span></p>
-    <p class="small muted">Overall = <%= categories.map(c => `${c.name} × ${(Number(c.weight) / 100).toFixed(2)}`).join(' + ') %>. The level is the overall score rounded to the nearest whole number.</p>
+    <p class="calc">Calculated overall: <strong id="calc-score">—</strong> / <%= levels.MAX_POINTS %> → <span id="calc-level" class="level level-none">—</span></p>
+    <p class="small muted">Overall = <%= categories.map(c => `${c.name} × ${(Number(c.weight) / 100).toFixed(2)}`).join(' + ') %>, using the points for each choice (Beginner 0 up to A 15).</p>
   </section>
 
-  <fieldset class="card">
-    <legend><h2>Independent rater assessment</h2></legend>
-    <p>Before considering the calculated score, what level do you believe this player demonstrates?</p>
-    <div class="level-picker" role="radiogroup" aria-label="Independent level">
-      <% levels.LEVELS.forEach(function (l) { %>
-        <label class="chip level-chip level-<%= levels.levelTier(l) %>"><input type="radio" name="independent_level" value="<%= l %>" <%= has('independent_level', l) ? 'checked' : '' %>><span><%= l %></span></label>
-      <% }) %>
-    </div>
-  </fieldset>
-
-  <fieldset class="card">
-    <legend><h2>Game performance check</h2></legend>
-    <p>During actual game play, does this player consistently demonstrate the skills reflected in this rating?</p>
-    <div class="chips">
-      <% [['consistently','Yes — Consistently'],['usually','Usually'],['sometimes','Sometimes'],['rarely','Rarely']].forEach(function (o) { %>
-        <label class="chip"><input type="radio" name="game_performance" value="<%= o[0] %>" <%= has('game_performance', o[0]) ? 'checked' : '' %>><span><%= o[1] %></span></label>
-      <% }) %>
-    </div>
-    <label>If "Sometimes" or "Rarely", explain:
-      <textarea name="game_performance_note" rows="2" maxlength="4000"><%= val('game_performance_note') %></textarea></label>
-  </fieldset>
-
-  <details class="card optional-section" <%= v.age_limited === 'yes' ? 'open' : '' %>>
-    <summary><h2>Age / physical limitations <small class="muted">(optional)</small></h2></summary>
-    <p class="small muted">Age should not automatically lower a player's skill rating.</p>
-    <p>Does age appear to materially limit the player's current physical performance?</p>
-    <div class="chips">
-      <label class="chip"><input type="radio" name="age_limited" value="no" <%= has('age_limited', 'no') ? 'checked' : '' %>><span>No</span></label>
-      <label class="chip"><input type="radio" name="age_limited" value="yes" <%= has('age_limited', 'yes') ? 'checked' : '' %>><span>Yes</span></label>
-    </div>
-    <p>If yes, what areas appear affected?</p>
-    <div class="chips">
-      <% R.AGE_AREAS.forEach(function (a) { %>
-        <label class="chip"><input type="checkbox" name="age_areas" value="<%= a %>" <%= has('age_areas', a) ? 'checked' : '' %>><span><%= a %></span></label>
-      <% }) %>
-    </div>
-    <label>Comments <textarea name="age_comments" rows="2" maxlength="4000"><%= val('age_comments') %></textarea></label>
-  </details>
-
-  <details class="card optional-section" <%= v.injury || (v.injury_affects && v.injury_affects.length) ? 'open' : '' %>>
-    <summary><h2>Current injury / physical limitation <small class="muted">(optional)</small></h2></summary>
-    <label>Current injury or limitation, if known <input name="injury" value="<%= val('injury') %>" maxlength="4000"></label>
-    <p>Does the limitation currently affect:</p>
-    <div class="chips">
-      <% R.INJURY_AFFECTS.forEach(function (a) { %>
-        <label class="chip"><input type="checkbox" name="injury_affects" value="<%= a %>" <%= has('injury_affects', a) ? 'checked' : '' %>><span><%= a %></span></label>
-      <% }) %>
-    </div>
-    <p>Is the limitation believed to be temporary?</p>
-    <div class="chips">
-      <% [['yes','Yes'],['no','No'],['unknown','Unknown']].forEach(function (o) { %>
-        <label class="chip"><input type="radio" name="injury_temporary" value="<%= o[0] %>" <%= has('injury_temporary', o[0]) ? 'checked' : '' %>><span><%= o[1] %></span></label>
-      <% }) %>
-    </div>
-    <div class="grid-2">
-      <label>Normal demonstrated level
-        <select name="injury_normal_level"><option value="">—</option><% levels.LEVELS.forEach(function (l) { %><option <%= has('injury_normal_level', l) ? 'selected' : '' %>><%= l %></option><% }) %></select></label>
-      <label>Current demonstrated level
-        <select name="injury_current_level"><option value="">—</option><% levels.LEVELS.forEach(function (l) { %><option <%= has('injury_current_level', l) ? 'selected' : '' %>><%= l %></option><% }) %></select></label>
-    </div>
-    <label>Comments <textarea name="injury_comments" rows="2" maxlength="4000"><%= val('injury_comments') %></textarea></label>
-    <p class="small muted">Do not automatically subtract points because of an injury. The question is whether the injury currently prevents the player from demonstrating their normal ability.</p>
-  </details>
-
   <section class="card">
-    <h2>Rater's final evidence</h2>
-    <p class="small muted">Identify the player's strengths and limitations rather than simply stating that they are "good" or "bad." E.g. "Strong forward skating and puck protection. Good hockey awareness and passing. Average shooting. Backward skating and defensive positioning are weaker."</p>
-    <label>Evidence supporting rating <textarea name="evidence" rows="3" maxlength="4000"><%= val('evidence') %></textarea></label>
-    <label>Player's primary strengths <textarea name="strengths" rows="2" maxlength="4000"><%= val('strengths') %></textarea></label>
-    <label>Primary areas for improvement <textarea name="improvements" rows="2" maxlength="4000"><%= val('improvements') %></textarea></label>
+    <h2><label for="evidence">Observation notes</label></h2>
+    <p class="small muted">What you saw: strengths and limitations, rather than simply "good" or "bad". E.g. "Strong forward skating and puck protection. Good passing. Backward skating and defensive positioning are weaker."</p>
+    <textarea id="evidence" name="evidence" rows="4" maxlength="4000"><%= val('evidence') %></textarea>
   </section>
 
   <fieldset class="card final">
-    <legend><h2>Final recommended level</h2></legend>
-    <p class="small muted">Observe → score the six categories → calculate the weighted score → compare with your independent assessment → document the evidence → assign the final GURHA level.</p>
-    <div class="level-picker" role="radiogroup" aria-label="Final recommended level">
+    <legend><h2>Rater recommendation</h2></legend>
+    <p>What level do you recommend for this player? <span class="small muted">This doesn't change the score; admins review it alongside the ratings.</span></p>
+    <div class="level-picker" role="radiogroup" aria-label="Rater recommendation">
       <% levels.LEVELS.forEach(function (l) { %>
         <label class="chip level-chip level-<%= levels.levelTier(l) %>"><input type="radio" name="final_level" value="<%= l %>" <%= has('final_level', l) ? 'checked' : '' %>><span><%= l %></span></label>
       <% }) %>

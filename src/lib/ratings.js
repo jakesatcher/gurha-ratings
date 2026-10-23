@@ -1,15 +1,11 @@
 'use strict';
 
 const db = require('../db');
-const { levelForScore, levelIndex, isLevel, LEVELS } = require('./levels');
+const { levelForScore, levelIndex, isLevel, gradeByKey, LEVELS, MAX_POINTS } = require('./levels');
 
 const ALREADY_RATED_MESSAGE =
   'You already rated this player. If you feel this is an error, or would like to change your rating, please contact an Admin';
 
-const GAME_PERFORMANCE = ['consistently', 'usually', 'sometimes', 'rarely'];
-const AGE_AREAS = ['Speed', 'Acceleration', 'Endurance', 'Recovery', 'Agility', 'Other'];
-const INJURY_AFFECTS = ['Skating', 'Speed', 'Agility', 'Shooting', 'Puck Handling', 'Endurance', 'Physical Play', 'Other'];
-const INJURY_TEMPORARY = ['yes', 'no', 'unknown'];
 // Two raters whose levels differ by this many steps or more => flag for a third review.
 const REVIEW_FLAG_GAP = 2;
 
@@ -19,7 +15,7 @@ async function getCategories({ includeInactive = false } = {}) {
   );
 }
 
-// Weighted overall score (0–11) for a set of {category_id, score} using category weights.
+// Weighted overall score (0–15) for a set of {category_id, score} using category weights.
 function weightedOverall(scores, categories) {
   const byId = new Map(categories.map((c) => [c.id, c]));
   let total = 0;
@@ -47,47 +43,41 @@ function cleanText(v, max = 4000) {
 }
 
 // Validates a submitted rating form. Returns { errors, data, scores }.
+// Fields: score_{categoryId} = a grade key ("D2:M", "BEG", "A"), comment_{categoryId} (optional),
+// final_level = the rater's recommended level, evidence = observation notes.
 function parseRatingForm(body, categories) {
   const errors = [];
   const scores = [];
   for (const cat of categories) {
-    const raw = body[`score_${cat.id}`];
-    const n = Number(raw);
-    if (raw === undefined || raw === '' || !Number.isInteger(n) || n < cat.min_score || n > cat.max_score) {
-      errors.push(`${cat.name}: choose a score from ${cat.min_score} to ${cat.max_score}.`);
+    const grade = gradeByKey(body[`score_${cat.id}`]);
+    if (!grade) {
+      errors.push(`${cat.name}: choose a level (and Low, Mid or High).`);
       continue;
     }
-    scores.push({ category_id: cat.id, score: n, comment: cleanText(body[`comment_${cat.id}`], 2000) });
+    scores.push({ category_id: cat.id, grade: grade.key, score: grade.points, comment: cleanText(body[`comment_${cat.id}`], 2000) });
   }
 
-  const pick = (v, allowed) => (allowed.includes(v) ? v : null);
-  const level = (v) => (isLevel(v) ? v : null);
-
+  // Sections dropped from the form are cleared so an admin edit of an older rating leaves nothing stale.
   const data = {
-    independent_level: level(body.independent_level),
-    game_performance: pick(body.game_performance, GAME_PERFORMANCE),
-    game_performance_note: cleanText(body.game_performance_note),
-    age_limited: body.age_limited === 'yes' ? true : body.age_limited === 'no' ? false : null,
-    age_areas: toArray(body.age_areas).filter((a) => AGE_AREAS.includes(a)),
-    age_comments: cleanText(body.age_comments),
-    injury: cleanText(body.injury),
-    injury_affects: toArray(body.injury_affects).filter((a) => INJURY_AFFECTS.includes(a)),
-    injury_temporary: pick(body.injury_temporary, INJURY_TEMPORARY),
-    injury_normal_level: level(body.injury_normal_level),
-    injury_current_level: level(body.injury_current_level),
-    injury_comments: cleanText(body.injury_comments),
+    independent_level: null,
+    game_performance: null,
+    game_performance_note: null,
+    age_limited: null,
+    age_areas: [],
+    age_comments: null,
+    injury: null,
+    injury_affects: [],
+    injury_temporary: null,
+    injury_normal_level: null,
+    injury_current_level: null,
+    injury_comments: null,
     evidence: cleanText(body.evidence),
-    strengths: cleanText(body.strengths),
-    improvements: cleanText(body.improvements),
-    final_level: level(body.final_level),
+    strengths: null,
+    improvements: null,
+    final_level: isLevel(body.final_level) ? body.final_level : null,
+    scale: 2,
   };
-
-  if (!data.independent_level) errors.push('Choose your independent level assessment.');
-  if (!data.game_performance) errors.push('Complete the game performance check.');
-  if (['sometimes', 'rarely'].includes(data.game_performance) && !data.game_performance_note) {
-    errors.push('Explain the game performance check when choosing "Sometimes" or "Rarely".');
-  }
-  if (!data.final_level) errors.push('Choose a final recommended level.');
+  if (!data.final_level) errors.push('Choose your rater recommendation.');
 
   return { errors, data, scores };
 }
@@ -95,12 +85,12 @@ function parseRatingForm(body, categories) {
 const RATING_FIELDS = [
   'independent_level', 'game_performance', 'game_performance_note', 'age_limited', 'age_areas', 'age_comments',
   'injury', 'injury_affects', 'injury_temporary', 'injury_normal_level', 'injury_current_level', 'injury_comments',
-  'evidence', 'strengths', 'improvements', 'final_level',
+  'evidence', 'strengths', 'improvements', 'final_level', 'scale',
 ];
 
 async function createRating(client, seasonId, playerId, raterId, data, scores) {
   const cols = ['season_id', 'player_id', 'rater_id', 'updated_by', ...RATING_FIELDS];
-  const vals = [seasonId, playerId, raterId, raterId, ...RATING_FIELDS.map((f) => data[f])];
+  const vals = [seasonId, playerId, raterId, raterId, ...RATING_FIELDS.map((f) => (f === 'scale' ? data.scale || 2 : data[f]))];
   const { rows } = await client.query(
     `INSERT INTO ratings (${cols.join(', ')}) VALUES (${cols.map((_, i) => `$${i + 1}`).join(', ')}) RETURNING id`,
     vals
@@ -126,10 +116,11 @@ async function updateRating(client, ratingId, actorId, data, scores) {
 
 async function insertScores(client, ratingId, scores) {
   for (const s of scores) {
-    await client.query('INSERT INTO rating_scores (rating_id, category_id, score, comment) VALUES ($1, $2, $3, $4)', [
+    await client.query('INSERT INTO rating_scores (rating_id, category_id, score, grade, comment) VALUES ($1, $2, $3, $4, $5)', [
       ratingId,
       s.category_id,
       s.score,
+      s.grade,
       s.comment,
     ]);
   }
@@ -169,21 +160,27 @@ async function loadRatings({ playerIds, ratingId, seasonId } = {}) {
   const scoreRows = await db.many('SELECT * FROM rating_scores WHERE rating_id = ANY($1::int[])', [ratings.map((r) => r.id)]);
   const byRating = new Map();
   for (const s of scoreRows) {
+    s.score = s.score === null ? null : Number(s.score); // numeric comes back as a string
+    s.gradeInfo = gradeByKey(s.grade);
     if (!byRating.has(s.rating_id)) byRating.set(s.rating_id, []);
     byRating.get(s.rating_id).push(s);
   }
   for (const r of ratings) {
     r.scores = byRating.get(r.id) || [];
     r.scoreMap = Object.fromEntries(r.scores.map((s) => [s.category_id, s]));
+    // Ratings from the old 0–11 scale are shown for reference but kept out of every average.
+    r.legacy = r.scale === 1;
     r.overall = weightedOverall(r.scores, categories);
-    r.calculated_level = levelForScore(r.overall);
+    r.calculated_level = r.legacy ? null : levelForScore(r.overall);
     r.effective_level = r.final_level || r.calculated_level;
   }
   return { ratings, categories };
 }
 
 // Aggregates a player's ratings into averages, level and review flag.
-function summarize(ratings, categories, player = {}) {
+function summarize(allRatings, categories, player = {}) {
+  const ratings = allRatings.filter((r) => !r.legacy);
+  const legacyCount = allRatings.length - ratings.length;
   const count = ratings.length;
   const categoryAverages = {};
   for (const cat of categories) {
@@ -201,6 +198,7 @@ function summarize(ratings, categories, player = {}) {
   const recommendedLevel = avgFinalIdx === null ? null : LEVELS[Math.round(avgFinalIdx)];
   return {
     count,
+    legacyCount,
     categoryAverages,
     avgOverall,
     calculatedLevel,
@@ -250,10 +248,7 @@ async function playerHistory(playerId) {
 module.exports = {
   playerHistory,
   ALREADY_RATED_MESSAGE,
-  GAME_PERFORMANCE,
-  AGE_AREAS,
-  INJURY_AFFECTS,
-  INJURY_TEMPORARY,
+  MAX_POINTS,
   REVIEW_FLAG_GAP,
   getCategories,
   weightedOverall,

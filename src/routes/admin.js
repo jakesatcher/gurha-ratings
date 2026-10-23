@@ -548,10 +548,9 @@ async function ratingPlayer(rating) {
 function ratingToValues(r) {
   const v = { ...r };
   for (const s of r.scores) {
-    v[`score_${s.category_id}`] = String(s.score);
+    if (s.grade) v[`score_${s.category_id}`] = s.grade; // older 0–11 ratings have no grade to pre-select
     v[`comment_${s.category_id}`] = s.comment || '';
   }
-  v.age_limited = r.age_limited === true ? 'yes' : r.age_limited === false ? 'no' : '';
   return v;
 }
 

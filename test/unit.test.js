@@ -3,8 +3,8 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const totp = require('../src/lib/totp');
-const { levelForScore, LEVELS } = require('../src/lib/levels');
-const { weightedOverall, summarize } = require('../src/lib/ratings');
+const { levelForScore, gradeForPoints, normalizeLevel, LEVELS, GRADES } = require('../src/lib/levels');
+const { weightedOverall, summarize, parseRatingForm } = require('../src/lib/ratings');
 const { normalizePlayer, parseUpload } = require('../src/lib/players');
 const { extractPlayers } = require('../src/lib/sportsengine');
 
@@ -18,13 +18,34 @@ test('TOTP matches RFC 6238 test vector and verifies with drift', () => {
   assert.ok(!totp.verify(secret, 'abcdef', now));
 });
 
-test('levels map 0–11 to BEG..A1 with rounding', () => {
-  assert.strictEqual(LEVELS.length, 12);
+test('levels: Low/Mid/High grades carry the agreed points and scores map back to levels', () => {
+  assert.deepStrictEqual(LEVELS, ['BEG', 'D3', 'D2', 'D1/C2', 'C1/B2', 'B1/A2', 'A']);
+  assert.deepStrictEqual(GRADES.map((g) => [g.key, g.points]), [
+    ['BEG', 0], ['D3:L', 1], ['D3:M', 1.5], ['D3:H', 2], ['D2:L', 3], ['D2:M', 4], ['D2:H', 5],
+    ['D1/C2:L', 6], ['D1/C2:M', 7], ['D1/C2:H', 8], ['C1/B2:L', 9], ['C1/B2:M', 10], ['C1/B2:H', 11],
+    ['B1/A2:L', 12], ['B1/A2:M', 13], ['B1/A2:H', 14], ['A', 15],
+  ]);
   assert.strictEqual(levelForScore(0), 'BEG');
-  assert.strictEqual(levelForScore(5.49), 'C2');
-  assert.strictEqual(levelForScore(5.5), 'C1');
-  assert.strictEqual(levelForScore(11), 'A1');
+  assert.strictEqual(levelForScore(0.49), 'BEG');
+  assert.strictEqual(levelForScore(2.49), 'D3');
+  assert.strictEqual(levelForScore(2.5), 'D2');
+  assert.strictEqual(levelForScore(6.8), 'D1/C2');
+  assert.strictEqual(levelForScore(14.5), 'A');
   assert.strictEqual(levelForScore(null), null);
+  assert.strictEqual(gradeForPoints('1.5').key, 'D3:M');
+  assert.strictEqual(gradeForPoints('2.5'), null);
+  assert.deepStrictEqual(['c2', 'D1', 'b', 'beginner', 'x'].map(normalizeLevel), ['D1/C2', 'D1/C2', 'B1/A2', 'BEG', null]);
+});
+
+test('rating form takes a grade per category and one recommendation', () => {
+  const cats = [{ id: 1, name: 'Skating', weight: 50 }, { id: 2, name: 'Passing', weight: 50 }];
+  const ok = parseRatingForm({ score_1: 'D3:M', score_2: 'A', final_level: 'D2', evidence: 'Quick' }, cats);
+  assert.deepStrictEqual(ok.errors, []);
+  assert.deepStrictEqual(ok.scores.map((s) => [s.grade, s.score]), [['D3:M', 1.5], ['A', 15]]);
+  assert.strictEqual(weightedOverall(ok.scores, cats), 8.25);
+  assert.deepStrictEqual([ok.data.final_level, ok.data.evidence, ok.data.game_performance], ['D2', 'Quick', null]);
+  const bad = parseRatingForm({ score_1: 'BEG:L', final_level: 'C3' }, cats);
+  assert.strictEqual(bad.errors.length, 3);
 });
 
 test('weighted overall follows the GURHA formula', () => {
@@ -40,14 +61,17 @@ test('weighted overall follows the GURHA formula', () => {
 test('summary flags third review when levels differ by 2+', () => {
   const cats = [{ id: 1, weight: 100, min_score: 0, max_score: 11 }];
   const mk = (score, final_level) => ({ scoreMap: { 1: { score } }, overall: score, effective_level: final_level });
-  const s = summarize([mk(6, 'C1'), mk(8, 'B2')], cats);
+  const s = summarize([mk(6, 'D2'), mk(8, 'C1/B2')], cats);
   assert.strictEqual(s.needsReview, true);
   assert.strictEqual(s.avgOverall, 7);
-  assert.strictEqual(s.calculatedLevel, 'B3');
-  const s2 = summarize([mk(6, 'C1'), mk(7, 'B3')], cats);
+  assert.strictEqual(s.calculatedLevel, 'D1/C2');
+  const s2 = summarize([mk(6, 'D2'), mk(7, 'D1/C2')], cats);
   assert.strictEqual(s2.needsReview, false);
-  const s3 = summarize([mk(6, 'C1')], cats, { level_override: 'A2' });
-  assert.strictEqual(s3.level, 'A2');
+  const s3 = summarize([mk(6, 'D2')], cats, { level_override: 'A' });
+  assert.strictEqual(s3.level, 'A');
+  // Old 0–11 ratings are shown but not counted
+  const s4 = summarize([mk(6, 'D2'), { ...mk(11, 'A1'), legacy: true }], cats);
+  assert.deepStrictEqual([s4.count, s4.legacyCount, s4.avgOverall], [1, 1, 6]);
 });
 
 test('import normalizes common column names and formats', () => {

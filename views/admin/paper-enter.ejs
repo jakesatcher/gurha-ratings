@@ -15,7 +15,7 @@
 
 <form method="post" action="/admin/paper/forms/<%= form.id %>/enter" enctype="multipart/form-data" class="paper-entry"
       data-weights='<%= JSON.stringify(cats.map(c => ({ id: c.id, w: Number(c.weight) }))) %>'
-      data-levels='<%= JSON.stringify(levels.LEVELS) %>'>
+      data-bounds='<%= JSON.stringify(levels.BOUNDS.map(b => ({ level: b.level, upper: b.upper === Infinity ? null : b.upper }))) %>'>
   <input type="hidden" name="_csrf" value="<%= csrfToken %>">
 
   <section class="card">
@@ -46,12 +46,12 @@
 
   <section class="card">
     <h2>Ratings</h2>
-    <p class="small muted">Scores <%= cats[0] ? `${cats[0].min_score}–${cats[0].max_score}` : '' %>. Levels: <%= levels.LEVELS.join(' ') %>. Game play: C, U, S or R (notes required for S/R). Overall is calculated as you type.</p>
+    <p class="small muted">Type the points the rater wrote for each category (low/mid/high): <%= levels.BANDS.map(b => `${b.level} ${Object.values(b.points).join('/')}`).join(' · ') %>. Recommendation: <%= levels.LEVELS.join(', ') %> (C2 or D1 also work). Overall is calculated as you type.</p>
     <div class="table-wrap"><table class="table compact paper-grid">
       <thead><tr>
         <th>#</th><th>Player</th>
         <% cats.forEach(function (c) { %><th title="<%= c.name %> (<%= Number(c.weight) %>%)"><%= c.name %></th><% }) %>
-        <th>Overall</th><th>Your level</th><th>Game play</th><th>Final level</th><th>Evidence / notes</th>
+        <th>Overall</th><th>Recommendation</th><th>Observation notes</th>
       </tr></thead>
       <tbody>
         <% for (let i = 0; i < form.rowCount; i++) { const p = form.players[i]; %>
@@ -68,15 +68,10 @@
             <% } %>
           </td>
           <% cats.forEach(function (c) { %>
-            <td><input class="cell" type="number" inputmode="numeric" min="<%= c.min_score %>" max="<%= c.max_score %>" step="1" name="r<%= i %>_s<%= c.id %>" value="<%= val(`r${i}_s${c.id}`) %>" aria-label="Row <%= i + 1 %> <%= c.name %>" data-cat="<%= c.id %>"></td>
+            <td><input class="cell" type="number" inputmode="decimal" min="0" max="<%= levels.MAX_POINTS %>" step="0.5" name="r<%= i %>_s<%= c.id %>" value="<%= val(`r${i}_s${c.id}`) %>" aria-label="Row <%= i + 1 %> <%= c.name %>" data-cat="<%= c.id %>"></td>
           <% }) %>
           <td class="nowrap" data-overall>—</td>
-          <td><input class="cell cell-lvl" name="r<%= i %>_ind" list="paper-levels" maxlength="3" value="<%= val(`r${i}_ind`) %>" aria-label="Row <%= i + 1 %> independent level" autocapitalize="characters"></td>
-          <td><select name="r<%= i %>_gp" aria-label="Row <%= i + 1 %> game play">
-            <option value=""></option>
-            <% [['C','C · Consistently'],['U','U · Usually'],['S','S · Sometimes'],['R','R · Rarely']].forEach(function (o) { %><option value="<%= o[0] %>" <%= val(`r${i}_gp`).toUpperCase() === o[0] ? 'selected' : '' %>><%= o[1] %></option><% }) %>
-          </select></td>
-          <td><input class="cell cell-lvl" name="r<%= i %>_final" list="paper-levels" maxlength="3" value="<%= val(`r${i}_final`) %>" aria-label="Row <%= i + 1 %> final level" autocapitalize="characters"></td>
+          <td><input class="cell cell-lvl" name="r<%= i %>_rec" list="paper-levels" maxlength="12" value="<%= val(`r${i}_rec`) %>" aria-label="Row <%= i + 1 %> recommendation" autocapitalize="characters"></td>
           <td><input class="cell-notes" name="r<%= i %>_notes" maxlength="4000" value="<%= val(`r${i}_notes`) %>" aria-label="Row <%= i + 1 %> notes"></td>
         </tr>
         <% } %>
