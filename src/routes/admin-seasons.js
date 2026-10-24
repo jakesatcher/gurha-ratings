@@ -330,6 +330,20 @@ router.post('/sportsengine/diagnostics', async (req, res) => {
   } catch (err) {
     error = err.message;
   }
+  // How teams link to seasons, checked against the current SportsEngine season.
+  try {
+    const seasonsLog = {};
+    const { seasons, currentId } = await sportsengine.listSeasons(seasonsLog);
+    const current = seasons.find((s) => s.id === currentId) || null;
+    diagnostics.seasons = { query: seasonsLog.seasonsQuery, source: seasonsLog.seasonsSource, count: seasons.length, current: current && current.name };
+    if (current) {
+      const { teams, filter } = await sportsengine.listTeams(current.id);
+      diagnostics.seasons.filter = filter;
+      diagnostics.seasons.currentTeams = teams.length;
+    }
+  } catch (err) {
+    diagnostics.seasons = { error: err.message };
+  }
   const sample = diagnostics.sample === undefined ? null : JSON.stringify(diagnostics.sample, null, 2);
   res.render('admin/sportsengine-diagnostics', {
     title: 'SportsEngine diagnostics',

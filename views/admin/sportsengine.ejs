@@ -10,18 +10,29 @@
   <% if (error) { %>
     <div class="alert alert-error"><strong>Couldn't load seasons:</strong> <%= error %> <a href="/admin/sportsengine/diagnostics">Run diagnostics</a></div>
   <% } else if (!result.supported) { %>
-    <div class="alert alert-info">Your SportsEngine API access doesn't expose seasons, so you'll pick teams directly and choose which GURHA season they go into.</div>
+    <div class="alert alert-info">Your SportsEngine API access doesn't expose seasons, so teams can't be split by season automatically. On the next page you can narrow the list by when teams were created and by division, then choose which GURHA season they go into.</div>
     <p><a class="btn btn-primary" href="/admin/sportsengine/teams">Browse teams</a></p>
   <% } else if (!result.seasons.length) { %>
     <div class="alert alert-info">SportsEngine returned no seasons for your organization. <a href="/admin/sportsengine/teams">Browse all teams</a> instead.</div>
   <% } else { %>
+    <% const seLink = (s) => `/admin/sportsengine/teams?${new URLSearchParams({ season: s.id, name: s.name, start: s.start_date || '', end: s.end_date || '' })}`;
+       const current = result.seasons.find(s => s.id === result.currentId); %>
+    <% if (current) { %>
+    <section class="card se-current">
+      <h2>Current season</h2>
+      <p><strong><%= current.name %></strong> <span class="muted small"><%= current.start_date ? fmtDate(current.start_date) : '' %><%= current.end_date ? ` – ${fmtDate(current.end_date)}` : '' %></span>
+        <% if (linked.get(current.id)) { %><span class="tag tag-approved">Imported as “<%= linked.get(current.id).name %>”</span><% } %></p>
+      <a class="btn btn-primary" href="<%= seLink(current) %>">Show <%= current.name %> teams</a>
+    </section>
+    <% } %>
     <section class="card">
-      <h2>Choose a SportsEngine season</h2>
+      <h2><%= current ? 'Or choose another season' : 'Choose a SportsEngine season' %></h2>
       <ul class="list">
         <% result.seasons.forEach(function (s) { const l = linked.get(s.id); %>
           <li>
-            <a href="/admin/sportsengine/teams?<%= new URLSearchParams({ season: s.id, name: s.name, start: s.start_date || '', end: s.end_date || '' }).toString() %>"><strong><%= s.name %></strong></a>
+            <a href="<%= seLink(s) %>"><strong><%= s.name %></strong></a>
             <span class="muted small"><%= s.start_date ? fmtDate(s.start_date) : '' %><%= s.end_date ? ` – ${fmtDate(s.end_date)}` : '' %></span>
+            <% if (s.id === result.currentId) { %><span class="tag tag-pending">Current</span><% } %>
             <% if (l) { %><span class="tag tag-approved">Imported as “<%= l.name %>”</span><% } %>
           </li>
         <% }) %>
@@ -36,8 +47,11 @@
   <% if (error) { %>
     <div class="alert alert-error"><strong>Couldn't load teams:</strong> <%= error %> <a href="/admin/sportsengine/diagnostics">Run diagnostics</a></div>
   <% } else { %>
-    <% if (seSeason.id && result.filter === 'none') { %>
-      <div class="alert alert-warn">SportsEngine didn't give a way to filter teams by season, so <strong>all teams</strong> are listed. Select only the ones in <%= seSeason.name || 'this season' %>.</div>
+    <% const unfiltered = result.filter === 'none'; %>
+    <% if (seSeason.id && unfiltered) { %>
+      <div class="alert alert-warn">SportsEngine doesn't say which season each team belongs to, so <strong>all teams</strong> are listed. Use the filters below to narrow them to <%= seSeason.name || 'this season' %>, and <a href="/admin/sportsengine/diagnostics">run diagnostics</a> to see what the API offers.</div>
+    <% } else if (seSeason.id) { %>
+      <p class="small muted">Showing only teams in <strong><%= seSeason.name %></strong>.</p>
     <% } %>
     <form method="post" action="/admin/sportsengine/import" class="stack" data-check-scope>
       <input type="hidden" name="_csrf" value="<%= csrfToken %>">
@@ -48,13 +62,30 @@
       <section class="card">
         <h2>Teams<%= seSeason.name ? ` in ${seSeason.name}` : '' %> <span class="muted small">(<%= result.teams.length %>)</span></h2>
         <% if (!result.teams.length) { %><p class="muted">No teams found.</p><% } else { %>
-          <label class="check"><input type="checkbox" data-check-all="team_ids"> Select all</label>
-          <ul class="team-pick">
-            <% result.teams.forEach(function (t) { %>
-              <li><label><input type="checkbox" name="team_ids" value="<%= t.id %>"> <%= t.name %>
-                <span class="small muted"><%= t.division || '' %><%= imported.has(t.id) ? ' · imported' : '' %></span></label></li>
-            <% }) %>
-          </ul>
+          <% if (unfiltered && result.teams.some(t => t.created || t.status)) {
+               const statuses = [...new Set(result.teams.map(t => t.status).filter(Boolean))];
+               // Default: teams created up to ~4 months before the season starts.
+               let since = '';
+               if (seSeason.start_date) { const d = new Date(seSeason.start_date); d.setMonth(d.getMonth() - 4); since = d.toISOString().slice(0, 10); } %>
+            <div class="filter-row se-filters" data-team-filters>
+              <% if (result.teams.some(t => t.created)) { %><label>Created on or after <input type="date" data-filter-created value="<%= since %>"></label><% } %>
+              <% if (statuses.length > 1) { %><label>Status <select data-filter-status><option value="">Any</option><% statuses.forEach(function (st) { %><option <%= /^active$/i.test(st) ? 'selected' : '' %>><%= st %></option><% }) %></select></label><% } %>
+              <span class="small muted" data-filter-count></span>
+            </div>
+          <% } %>
+          <label class="check"><input type="checkbox" data-check-all="team_ids"> Select all<%= unfiltered ? ' shown' : '' %></label>
+          <% const groups = new Map(); result.teams.forEach(function (t) { const k = t.division || (t.division_id ? `Division ${t.division_id}` : 'No division'); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(t); }); %>
+          <% groups.forEach(function (list, div) { %>
+            <fieldset class="se-division" data-check-scope>
+              <legend><label class="check"><input type="checkbox" data-check-all="team_ids"> <strong><%= div %></strong> <span class="small muted">(<%= list.length %>)</span></label></legend>
+              <ul class="team-pick">
+                <% list.forEach(function (t) { %>
+                  <li data-team data-created="<%= t.created ? String(t.created).slice(0, 10) : '' %>" data-status="<%= t.status || '' %>"><label><input type="checkbox" name="team_ids" value="<%= t.id %>"> <%= t.name %>
+                    <span class="small muted"><%= [t.created ? `created ${fmtDate(String(t.created).slice(0, 10))}` : null, t.status && unfiltered ? t.status : null, imported.has(t.id) ? 'imported' : null].filter(Boolean).join(' · ') %></span></label></li>
+                <% }) %>
+              </ul>
+            </fieldset>
+          <% }) %>
         <% } %>
       </section>
       <section class="card">

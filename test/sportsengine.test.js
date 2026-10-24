@@ -81,6 +81,8 @@ function complexity(query) {
 
 let server;
 const queries = [];
+// The schema the mock server answers with; tests for other API shapes swap it out.
+const active = { schema, root };
 
 test.before(async () => {
   server = http.createServer((req, res) => {
@@ -99,7 +101,7 @@ test.before(async () => {
           return res.end(JSON.stringify({ data: null, errors: [{ message: `Query is too complex: ${c}. Maximum allowed complexity: 101` }] }));
         }
       }
-      const result = await graphql({ schema, source: query, rootValue: root, variableValues: variables });
+      const result = await graphql({ schema: active.schema, source: query, rootValue: active.root, variableValues: variables });
       res.statusCode = result.errors && !result.data ? 400 : 200;
       res.end(JSON.stringify(result));
     });
@@ -121,12 +123,115 @@ test.after(async () => {
   await h.db.pool.end();
 });
 
-test('lists seasons, newest first', async () => {
+test('lists seasons, newest first, and marks the current one', async () => {
   const se = require('../src/lib/sportsengine');
-  const { supported, seasons } = await se.listSeasons();
+  const { supported, seasons, currentId } = await se.listSeasons();
   assert.ok(supported);
   assert.deepStrictEqual(seasons.map((s) => s.name), ['2025-26', '2024-25']);
   assert.strictEqual(seasons[0].start_date, '2025-09-01');
+  assert.strictEqual(currentId, 's25');
+});
+
+test('current season: the one running today, else the latest started, else the newest', () => {
+  const { currentSeasonId } = require('../src/lib/sportsengine');
+  const list = [
+    { id: 'next', start_date: '2026-09-01', end_date: '2027-03-01' },
+    { id: 'now', start_date: '2026-03-01', end_date: '2026-08-31' },
+    { id: 'old', start_date: '2025-09-01', end_date: '2026-02-28' },
+  ];
+  assert.strictEqual(currentSeasonId(list, '2026-05-10'), 'now');
+  assert.strictEqual(currentSeasonId(list, '2026-08-31'), 'now');
+  assert.strictEqual(currentSeasonId(list.slice(1), '2026-12-01'), 'now', 'between seasons: the latest that started');
+  assert.strictEqual(currentSeasonId([{ id: 'a' }, { id: 'b' }]), 'a');
+});
+
+// Runs fn against a different mock API shape, then restores the default one.
+async function withApi(sdl, rootValue, fn) {
+  const se = require('../src/lib/sportsengine');
+  const saved = { ...active };
+  Object.assign(active, { schema: buildSchema(sdl), root: rootValue });
+  se.resetCache();
+  try {
+    await fn(se);
+  } finally {
+    Object.assign(active, saved);
+    se.resetCache();
+  }
+}
+
+const TEAM_SDL = `
+  type TeamPage { results: [Team] }
+  type Team { id: ID! name: String divisionId: ID created: String status: String players: [Player] }
+  type Player { id: ID! firstName: String lastName: String }`;
+const TEAM_ROWS = [
+  { id: 'n1', name: 'Pond Hockey', divisionId: 'dA', created: '2026-08-15T00:00:00Z', status: 'active' },
+  { id: 'n2', name: 'Biscuits', divisionId: 'dB', created: '2026-08-20T00:00:00Z', status: 'active' },
+  { id: 'o1', name: 'Pond Hockey', divisionId: 'dOld', created: '2025-08-10T00:00:00Z', status: 'inactive' },
+];
+const teamsRoot = { teams: ({ page: p, perPage }) => ({ results: page(TEAM_ROWS, p, perPage).map((t) => ({ ...t, players: [] })) }) };
+
+test('no seasons query: seasons come from divisions, and teams are matched through their division', async () => {
+  await withApi(`
+    type Query {
+      teams(organizationId: Int!, page: Int, perPage: Int): TeamPage
+      divisions(organizationId: ID!, page: Int, perPage: Int): DivisionPage
+    }
+    type DivisionPage { results: [Division] }
+    type Division { id: ID name: String season: Season }
+    type Season { id: ID name: String startDate: String endDate: String }
+  ${TEAM_SDL}`, {
+    ...teamsRoot,
+    divisions: () => ({ results: [
+      { id: 'dA', name: 'C2', season: { id: '70', name: 'Fall 2026', startDate: '2026-09-01', endDate: '2027-03-31' } },
+      { id: 'dB', name: 'B1', season: { id: '70', name: 'Fall 2026', startDate: '2026-09-01', endDate: '2027-03-31' } },
+      { id: 'dOld', name: 'C2', season: { id: '60', name: 'Fall 2025', startDate: '2025-09-01', endDate: '2026-03-31' } },
+    ] }),
+  }, async (se) => {
+    const { supported, seasons, source } = await se.listSeasons();
+    assert.ok(supported);
+    assert.strictEqual(source, 'divisions');
+    assert.deepStrictEqual(seasons.map((x) => x.name), ['Fall 2026', 'Fall 2025']);
+    const { teams, filter } = await se.listTeams('70');
+    assert.strictEqual(filter, 'division');
+    assert.deepStrictEqual(teams.map((t) => `${t.name} ${t.division}`), ['Biscuits B1', 'Pond Hockey C2']);
+  });
+});
+
+test('seasons that list their divisions link teams to a season', async () => {
+  await withApi(`
+    type Query {
+      seasons(organizationId: ID!, page: Int, perPage: Int): SeasonPage
+      teams(organizationId: Int!, page: Int, perPage: Int): TeamPage
+    }
+    type SeasonPage { results: [Season] }
+    type Season { id: ID name: String startDate: String endDate: String divisions: [Division] }
+    type Division { id: ID name: String }
+  ${TEAM_SDL}`, {
+    ...teamsRoot,
+    seasons: () => ({ results: [
+      { id: '60', name: 'Fall 2025', startDate: '2025-09-01', endDate: '2026-03-31', divisions: [{ id: 'dOld', name: 'C2' }] },
+      { id: '70', name: 'Fall 2026', startDate: '2026-09-01', endDate: '2027-03-31', divisions: [{ id: 'dA', name: 'C2' }, { id: 'dB', name: 'B1' }] },
+    ] }),
+  }, async (se) => {
+    const { teams, filter } = await se.listTeams('60');
+    assert.strictEqual(filter, 'season divisions');
+    assert.deepStrictEqual(teams.map((t) => t.id), ['o1']);
+  });
+});
+
+test('no season link at all: every team is listed with created date and status for filtering', async () => {
+  await withApi(`
+    type Query { teams(organizationId: Int!, page: Int, perPage: Int): TeamPage }
+  ${TEAM_SDL}`, teamsRoot, async (se) => {
+    const { supported, seasons } = await se.listSeasons();
+    assert.strictEqual(supported, false);
+    assert.deepStrictEqual(seasons, []);
+    const { teams, filter } = await se.listTeams(null);
+    assert.strictEqual(filter, 'none');
+    assert.deepStrictEqual(teams.map((t) => [t.id, t.created.slice(0, 10), t.status, t.division_id]), [
+      ['n2', '2026-08-20', 'active', 'dB'], ['n1', '2026-08-15', 'active', 'dA'], ['o1', '2025-08-10', 'inactive', 'dOld'],
+    ]);
+  });
 });
 
 test('lists teams for a season via divisions and never sends unsupported arguments', async () => {
@@ -191,9 +296,13 @@ test('admin imports SportsEngine seasons and teams; players carry across seasons
 
   const seasonsPage = await admin.get('/admin/sportsengine');
   assert.match(seasonsPage.text, /2025-26/);
+  assert.match(seasonsPage.text, /Show 2025-26 teams/, 'current season offered first');
+  assert.match(seasonsPage.text, /Current season/);
   const teamsPage = await admin.get('/admin/sportsengine/teams?season=s25&name=2025-26&start=2025-09-01');
   assert.match(teamsPage.text, /Ice Dogs/);
   assert.ok(!teamsPage.text.includes('value="t3"'), 'last season team is filtered out');
+  assert.match(teamsPage.text, /Showing only teams in <strong>2025-26/);
+  assert.doesNotMatch(teamsPage.text, /data-team-filters/, 'no fallback filters when the season filter works');
 
   const csrf = h.csrfFrom(teamsPage.text);
   const imp = await admin.post('/admin/sportsengine/import').type('form').send({

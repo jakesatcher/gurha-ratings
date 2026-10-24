@@ -28,6 +28,10 @@
       <dt>Query mode</dt><dd><%= d.queryMode || '—' %></dd>
       <% if (d.teamsArgs) { %><dt>teams arguments</dt><dd><code><%= d.teamsArgs.join(', ') || '(none)' %></code></dd><% } %>
       <% if (d.divisionsFound !== undefined) { %><dt>Divisions found</dt><dd><%= d.divisionsFound %></dd><% } %>
+      <% if (d.seasons) { const S = d.seasons; %>
+        <dt>Seasons</dt><dd><% if (S.error) { %><%= S.error %><% } else { %><%= S.count %> found<%= S.source ? ` (from ${S.source})` : '' %><%= S.current ? `; current: ${S.current}` : '' %><% } %></dd>
+        <% if (S.filter) { %><dt>Teams → season</dt><dd><%= S.filter === 'none' ? 'No link found: teams can’t be filtered by season' : `linked via ${S.filter}` %> (<%= S.currentTeams %> teams in the current season list)</dd><% } %>
+      <% } %>
       <% if (d.queries) { %><dt>Available queries</dt><dd><code class="wrap small"><%= d.queries.join(', ') %></code></dd><% } %>
     </dl>
   </section>

@@ -628,3 +628,8 @@ h2 { text-transform: uppercase; font-weight: 600; }
 .rating-instruction { margin: .25rem 0 .6rem; }
 .dq-form { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin-top: .5rem; }
 .dq-form input[name="reason"] { flex: 1 1 16rem; }
+.se-division { border: 1px solid var(--border); border-radius: 10px; padding: .4rem .8rem .6rem; margin: 0 0 .6rem; }
+.se-division legend { padding: 0 .3rem; }
+.se-filters { display: flex; flex-wrap: wrap; gap: .75rem; align-items: flex-end; margin-bottom: .75rem; }
+.se-filters label { margin: 0; }
+.se-current { border-left: 4px solid var(--brand-2); }

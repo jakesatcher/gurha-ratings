@@ -21,7 +21,9 @@
   document.querySelectorAll('[data-check-all]').forEach(function (box) {
     box.addEventListener('change', function () {
       var scope = box.closest('[data-check-scope]') || document;
-      scope.querySelectorAll('input[type="checkbox"][name="' + box.getAttribute('data-check-all') + '"]').forEach(function (c) { c.checked = box.checked; });
+      scope.querySelectorAll('input[type="checkbox"][name="' + box.getAttribute('data-check-all') + '"]').forEach(function (c) {
+        if (!c.closest('[hidden]')) c.checked = box.checked; // filtered-out items stay as they are
+      });
     });
   });
 
@@ -223,4 +225,30 @@
       target.hidden = false;
     });
   }
+})();
+
+// SportsEngine team picker: when the API can't filter teams by season, narrow by created date / status.
+(function () {
+  var bar = document.querySelector('[data-team-filters]');
+  if (!bar) return;
+  var created = bar.querySelector('[data-filter-created]');
+  var status = bar.querySelector('[data-filter-status]');
+  var count = bar.querySelector('[data-filter-count]');
+  var items = document.querySelectorAll('[data-team]');
+  function apply() {
+    var shown = 0;
+    items.forEach(function (li) {
+      var ok = (!created || !created.value || !li.getAttribute('data-created') || li.getAttribute('data-created') >= created.value) &&
+               (!status || !status.value || li.getAttribute('data-status') === status.value);
+      li.hidden = !ok;
+      if (!ok) li.querySelector('input').checked = false; // never import a team you can't see
+      if (ok) shown++;
+    });
+    document.querySelectorAll('.se-division').forEach(function (fs) {
+      fs.hidden = !fs.querySelector('[data-team]:not([hidden])');
+    });
+    if (count) count.textContent = shown + ' of ' + items.length + ' teams shown';
+  }
+  [created, status].forEach(function (el) { if (el) el.addEventListener('change', apply); });
+  apply();
 })();

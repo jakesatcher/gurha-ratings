@@ -27,6 +27,9 @@ const names = (list) => new RegExp(`^(${list.join('|')})$`, 'i');
 const RELEVANCE = {
   roster: names([...WRAPPERS, 'players', 'roster', 'rosterPlayers', 'members', 'athletes', 'profile', 'persona', 'person', 'division', 'position']),
   teams: names([...WRAPPERS, 'division', 'season', 'program', 'league']),
+  // Seasons, plus the divisions/teams inside them (ids only) so teams can be matched to a season.
+  seasons: names([...WRAPPERS, 'divisions', 'teams', 'subseasons']),
+  divisions: names([...WRAPPERS, 'season']),
   plain: names(WRAPPERS),
 };
 // Only these scalar fields are requested (everything else costs complexity and isn't used).
@@ -39,6 +42,7 @@ const WANTED_SCALARS = names([
   'position', 'positionName', 'abbreviation',
   'dateOfBirth', 'date_of_birth', 'birthDate', 'birthdate',
   'sportsEngineId', 'profileId', 'personaId', 'userId',
+  'created', 'createdAt', 'created_at', 'status', 'seasonName', 'season_name',
 ]);
 // Object fields never followed.
 const SKIP_FIELD = /^(organization|org|parent|children|games|events|schedule|standings|staff|coaches|invoices|payments|registrations?|memberships|registrationResults|verifiedProfile|statistics)$/i;
@@ -304,49 +308,141 @@ const DATE_KEYS = {
 };
 
 // ---------- Seasons ----------
+//
+// The real API's Team has no season field (only divisionId), so a team's season has to be worked out
+// from whatever links the schema offers. In order of preference:
+//   1. the teams query takes a season argument;
+//   2. Team carries seasonId / season { id };
+//   3. divisions: queried per season (season argument), or Division carries seasonId / season { id };
+//   4. seasons list their divisions or teams.
+// If none of these exist, teams can't be split by season and the picker falls back to filters.
+
+const isSeasonNode = (n) => n.id !== undefined && (n.name || n.title) && !isWrapperType(n.__typename) && !/division|team/i.test(n.__typename || '');
+const seasonRecord = (n) => ({
+  id: String(n.id),
+  name: String(n.name || n.title),
+  start_date: first(n, DATE_KEYS.start),
+  end_date: first(n, DATE_KEYS.end),
+});
+
+// Runs the seasons query, following nested divisions/teams when the schema has them. Falls back to the
+// plain season fields if the richer query is rejected.
+async function fetchSeasonNodes(schema, field, log) {
+  const typeName = unwrap(field.type).name;
+  const rich = buildSelection(schema.types, typeName, 4, { relevance: RELEVANCE.seasons, skip: SKIP_FOR_TEAMS });
+  const plain = buildSelection(schema.types, typeName, 3, { relevance: RELEVANCE.plain });
+  const run = (selection) => fetchAllPages(field, selection, {}, (d) => collect(d, isSeasonNode), log);
+  if (rich !== plain) {
+    try {
+      return await run(rich);
+    } catch {
+      // nested lists not allowed here; seasons alone are still useful
+    }
+  }
+  return run(plain);
+}
+
+// Season ids → the division / team ids listed inside each season node.
+function nestedLinks(pages) {
+  const divisionSeason = new Map();
+  const teamSeason = new Map();
+  for (const season of pages.flatMap((d) => collect(d, isSeasonNode))) {
+    for (const [key, value] of Object.entries(season)) {
+      if (!value || typeof value !== 'object') continue;
+      const target = /division/i.test(key) ? divisionSeason : /team/i.test(key) ? teamSeason : null;
+      if (!target) continue;
+      for (const n of collect(value, (x) => x.id !== undefined && !isWrapperType(x.__typename))) target.set(String(n.id), String(season.id));
+    }
+  }
+  return { divisionSeason, teamSeason };
+}
+
+// Seasons named on divisions or teams (season { id name … } or seasonId + seasonName).
+function seasonsFromNodes(nodes) {
+  const out = new Map();
+  for (const n of nodes) {
+    if (n.season && typeof n.season === 'object' && n.season.id !== undefined) {
+      out.set(String(n.season.id), seasonRecord({ ...n.season, name: n.season.name || n.season.title || `Season ${n.season.id}` }));
+    } else {
+      const id = seasonIdOf(n);
+      if (id && !out.has(id)) out.set(id, { id, name: String(first(n, ['seasonName', 'season_name']) || `Season ${id}`), start_date: null, end_date: null });
+    }
+  }
+  return out;
+}
+
+// The season running today; otherwise the most recent one that has started; otherwise the newest.
+function currentSeasonId(seasons, today = new Date().toISOString().slice(0, 10)) {
+  const d = (v) => (v ? String(v).slice(0, 10) : null);
+  const running = seasons.find((s) => d(s.start_date) && d(s.start_date) <= today && (!d(s.end_date) || d(s.end_date) >= today));
+  if (running) return running.id;
+  const started = seasons.filter((s) => d(s.start_date) && d(s.start_date) <= today);
+  if (started.length) return started[0].id;
+  return seasons.length ? seasons[0].id : null;
+}
+
+const bySeasonOrder = (a, b) =>
+  String(b.start_date || '').localeCompare(String(a.start_date || '')) ||
+  (Number(b.id) - Number(a.id) || 0) ||
+  b.id.localeCompare(a.id);
 
 async function listSeasons(log = {}) {
   const schema = await getSchema();
   const field = findQuery(schema, ['seasons', /seasons$/i]);
   log.seasonsQuery = field ? field.name : null;
-  if (!field) return { supported: false, seasons: [] };
-  const selection = buildSelection(schema.types, unwrap(field.type).name, 3, { relevance: RELEVANCE.plain });
-  const isSeason = (n) => n.id !== undefined && (n.name || n.title) && !isWrapperType(n.__typename);
-  const pages = await fetchAllPages(field, selection, {}, (d) => collect(d, isSeason), log);
-  const byId = new Map();
-  for (const n of pages.flatMap((d) => collect(d, isSeason))) {
-    byId.set(String(n.id), {
-      id: String(n.id),
-      name: String(n.name || n.title),
-      start_date: first(n, DATE_KEYS.start),
-      end_date: first(n, DATE_KEYS.end),
-    });
+  let byId = new Map();
+  let source = null;
+  if (field) {
+    const pages = await fetchSeasonNodes(schema, field, log);
+    for (const n of pages.flatMap((d) => collect(d, isSeasonNode))) byId.set(String(n.id), seasonRecord(n));
+    source = 'seasons';
   }
-  const seasons = [...byId.values()].sort((a, b) => String(b.start_date || '').localeCompare(String(a.start_date || '')) || b.id.localeCompare(a.id));
-  return { supported: true, seasons };
+  if (!byId.size) {
+    // No seasons query: use the seasons that divisions or teams point at.
+    const divisions = await fetchDivisions(schema, null);
+    byId = seasonsFromNodes(divisions.nodes);
+    source = byId.size ? 'divisions' : null;
+    if (!byId.size) {
+      const teamField = findQuery(schema, ['teams', /teams$/i]);
+      if (teamField) {
+        const selection = buildSelection(schema.types, unwrap(teamField.type).name, 4, { relevance: RELEVANCE.teams, skip: SKIP_FOR_TEAMS });
+        const pages = await fetchAllPages(teamField, selection, {}, (d) => collect(d, isTeamNode));
+        byId = seasonsFromNodes(pages.flatMap((d) => collect(d, isTeamNode)));
+        source = byId.size ? 'teams' : null;
+      }
+    }
+  }
+  const seasons = [...byId.values()].sort(bySeasonOrder);
+  log.seasonsSource = source;
+  return { supported: seasons.length > 0 || Boolean(field), seasons, currentId: currentSeasonId(seasons), source };
 }
 
-// ---------- Divisions (names, and season filtering when teams can't be filtered directly) ----------
+// ---------- Divisions (names, and season links) ----------
+
+async function fetchDivisions(schema, seasonId) {
+  const field = findQuery(schema, ['divisions', /divisions$/i]);
+  if (!field) return { field: null, nodes: [], bySeasonArg: false };
+  const bySeasonArg = Boolean(seasonId) && supportsArg(field, ARG.season);
+  const selection = buildSelection(schema.types, unwrap(field.type).name, 3, { relevance: RELEVANCE.divisions, skip: SKIP_FOR_TEAMS });
+  const isDivision = (n) => n.id !== undefined && n.name && !isWrapperType(n.__typename) && !/season/i.test(n.__typename || '');
+  try {
+    const pages = await fetchAllPages(field, selection, { seasonId: bySeasonArg ? seasonId : null }, (d) => collect(d, isDivision));
+    return { field, nodes: pages.flatMap((d) => collect(d, isDivision)), bySeasonArg };
+  } catch {
+    return { field, nodes: [], bySeasonArg };
+  }
+}
 
 async function listDivisions(seasonId) {
   const schema = await getSchema();
-  const field = findQuery(schema, ['divisions', /divisions$/i]);
-  if (!field) return { names: new Map(), seasonDivisionIds: null };
-  const selection = buildSelection(schema.types, unwrap(field.type).name, 3, { relevance: RELEVANCE.teams, skip: SKIP_FOR_TEAMS });
-  try {
-    const bySeasonArg = Boolean(seasonId) && supportsArg(field, ARG.season);
-    const pages = await fetchAllPages(field, selection, { seasonId: bySeasonArg ? seasonId : null }, (d) => collect(d, (n) => n.id !== undefined && n.name));
-    const divisions = pages.flatMap((d) => collect(d, (n) => n.id !== undefined && n.name && !isWrapperType(n.__typename) && !/season/i.test(n.__typename || '')));
-    const names = new Map(divisions.map((d) => [String(d.id), d.name]));
-    let seasonDivisionIds = null;
-    if (seasonId && bySeasonArg) seasonDivisionIds = new Set(divisions.map((d) => String(d.id)));
-    else if (seasonId && divisions.some((d) => seasonIdOf(d) !== null)) {
-      seasonDivisionIds = new Set(divisions.filter((d) => seasonIdOf(d) === String(seasonId)).map((d) => String(d.id)));
-    }
-    return { names, seasonDivisionIds };
-  } catch {
-    return { names: new Map(), seasonDivisionIds: null };
+  const { nodes, bySeasonArg } = await fetchDivisions(schema, seasonId);
+  const names = new Map(nodes.map((d) => [String(d.id), d.name]));
+  let seasonDivisionIds = null;
+  if (seasonId && bySeasonArg) seasonDivisionIds = new Set(nodes.map((d) => String(d.id)));
+  else if (seasonId && nodes.some((d) => seasonIdOf(d) !== null)) {
+    seasonDivisionIds = new Set(nodes.filter((d) => seasonIdOf(d) === String(seasonId)).map((d) => String(d.id)));
   }
+  return { names, seasonDivisionIds };
 }
 
 function divisionOf(team, divisionNames) {
@@ -359,7 +455,13 @@ function divisionOf(team, divisionNames) {
 
 // ---------- Teams ----------
 
-// Lists teams, filtered to an SE season when possible. `filter` says how the season filter was applied.
+const teamDivisionId = (t) => {
+  const id = first(t, ['divisionId', 'division_id']) ?? (t.division && typeof t.division === 'object' ? t.division.id : null);
+  return id === null || id === undefined ? null : String(id);
+};
+
+// Lists teams, filtered to an SE season when possible. `filter` says how the season filter was applied
+// ('none' when the API offers no way to tell which season a team belongs to).
 async function listTeams(seasonId = null, log = {}) {
   const schema = await getSchema();
   const field = findQuery(schema, ['teams', /teams$/i]);
@@ -377,14 +479,38 @@ async function listTeams(seasonId = null, log = {}) {
       teams = teams.filter((t) => seasonIdOf(t) === String(seasonId));
       filter = 'team season';
     } else if (seasonDivisionIds) {
-      teams = teams.filter((t) => seasonDivisionIds.has(String(first(t, ['divisionId', 'division_id']) ?? (t.division && t.division.id))));
+      teams = teams.filter((t) => seasonDivisionIds.has(teamDivisionId(t)));
       filter = 'division';
+    } else {
+      const seasonsField = findQuery(schema, ['seasons', /seasons$/i]);
+      if (seasonsField) {
+        const { divisionSeason, teamSeason } = nestedLinks(await fetchSeasonNodes(schema, seasonsField, null));
+        if (teamSeason.size) {
+          teams = teams.filter((t) => teamSeason.get(String(t.id)) === String(seasonId));
+          filter = 'season teams';
+        } else if (divisionSeason.size) {
+          teams = teams.filter((t) => divisionSeason.get(teamDivisionId(t)) === String(seasonId));
+          filter = 'season divisions';
+        }
+      }
     }
   }
   const byId = new Map();
-  for (const t of teams) byId.set(String(t.id), { id: String(t.id), name: String(t.name), division: divisionOf(t, names) });
+  for (const t of teams) {
+    byId.set(String(t.id), {
+      id: String(t.id),
+      name: String(t.name),
+      division: divisionOf(t, names),
+      division_id: teamDivisionId(t),
+      created: first(t, ['created', 'createdAt', 'created_at']),
+      status: typeof t.status === 'string' ? t.status : null,
+    });
+  }
   log.teamsFilter = filter;
-  return { teams: [...byId.values()].sort((a, b) => (a.division || '').localeCompare(b.division || '') || a.name.localeCompare(b.name)), filter };
+  return {
+    teams: [...byId.values()].sort((a, b) => (a.division || '').localeCompare(b.division || '') || a.name.localeCompare(b.name)),
+    filter,
+  };
 }
 
 // ---------- Rosters ----------
@@ -522,6 +648,7 @@ async function fetchRoster({ teamIds = null, seasonId = null, diagnostics = null
 
 module.exports = {
   isConfigured,
+  currentSeasonId,
   listSeasons,
   listTeams,
   fetchRoster,
