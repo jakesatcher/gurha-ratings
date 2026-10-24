@@ -49,9 +49,23 @@
   <% } else { %>
     <% const unfiltered = result.filter === 'none'; %>
     <% if (seSeason.id && unfiltered) { %>
-      <div class="alert alert-warn">SportsEngine doesn't say which season each team belongs to, so <strong>all teams</strong> are listed. Use the filters below to narrow them to <%= seSeason.name || 'this season' %>, and <a href="/admin/sportsengine/diagnostics">run diagnostics</a> to see what the API offers.</div>
+      <div class="alert alert-warn">SportsEngine doesn't say which season each team belongs to, so <strong>all teams</strong> are listed. Use the filters to narrow them to <%= seSeason.name || 'this season' %>, and <a href="/admin/sportsengine/diagnostics">run diagnostics</a> to see what the API offers.</div>
     <% } else if (seSeason.id) { %>
       <p class="small muted">Showing only teams in <strong><%= seSeason.name %></strong>.</p>
+    <% } %>
+    <% if (filters) { %>
+      <form method="get" action="/admin/sportsengine/teams" class="card se-filters">
+        <input type="hidden" name="season" value="<%= seSeason.id || '' %>">
+        <input type="hidden" name="name" value="<%= seSeason.name || '' %>">
+        <input type="hidden" name="start" value="<%= seSeason.start_date || '' %>">
+        <input type="hidden" name="end" value="<%= seSeason.end_date || '' %>">
+        <input type="hidden" name="applied" value="1">
+        <% if (filters.hasCreated) { %><label>Created on or after <input type="date" name="created_since" value="<%= filters.since || '' %>"></label><% } %>
+        <% if (filters.statuses.length) { %><label>Status <select name="status"><option value="">Any</option><% filters.statuses.forEach(function (st) { %><option <%= filters.status === st ? 'selected' : '' %>><%= st %></option><% }) %></select></label><% } %>
+        <button class="btn btn-primary" type="submit">Apply filters</button>
+        <a class="btn" href="/admin/sportsengine/teams?<%= new URLSearchParams({ season: seSeason.id || '', name: seSeason.name || '', start: seSeason.start_date || '', end: seSeason.end_date || '', applied: '1' }).toString() %>">Show all</a>
+        <span class="small muted"><%= result.teams.length %> of <%= filters.total %> teams shown</span>
+      </form>
     <% } %>
     <form method="post" action="/admin/sportsengine/import" class="stack" data-check-scope>
       <input type="hidden" name="_csrf" value="<%= csrfToken %>">
@@ -62,25 +76,14 @@
       <section class="card">
         <h2>Teams<%= seSeason.name ? ` in ${seSeason.name}` : '' %> <span class="muted small">(<%= result.teams.length %>)</span></h2>
         <% if (!result.teams.length) { %><p class="muted">No teams found.</p><% } else { %>
-          <% if (unfiltered && result.teams.some(t => t.created || t.status)) {
-               const statuses = [...new Set(result.teams.map(t => t.status).filter(Boolean))];
-               // Default: teams created up to ~4 months before the season starts.
-               let since = '';
-               if (seSeason.start_date) { const d = new Date(seSeason.start_date); d.setMonth(d.getMonth() - 4); since = d.toISOString().slice(0, 10); } %>
-            <div class="filter-row se-filters" data-team-filters>
-              <% if (result.teams.some(t => t.created)) { %><label>Created on or after <input type="date" data-filter-created value="<%= since %>"></label><% } %>
-              <% if (statuses.length > 1) { %><label>Status <select data-filter-status><option value="">Any</option><% statuses.forEach(function (st) { %><option <%= /^active$/i.test(st) ? 'selected' : '' %>><%= st %></option><% }) %></select></label><% } %>
-              <span class="small muted" data-filter-count></span>
-            </div>
-          <% } %>
-          <label class="check"><input type="checkbox" data-check-all="team_ids"> Select all<%= unfiltered ? ' shown' : '' %></label>
+          <label class="check"><input type="checkbox" data-check-all="team_ids"> Select all<%= filters ? ' listed' : '' %></label>
           <% const groups = new Map(); result.teams.forEach(function (t) { const k = t.division || (t.division_id ? `Division ${t.division_id}` : 'No division'); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(t); }); %>
           <% groups.forEach(function (list, div) { %>
             <fieldset class="se-division" data-check-scope>
               <legend><label class="check"><input type="checkbox" data-check-all="team_ids"> <strong><%= div %></strong> <span class="small muted">(<%= list.length %>)</span></label></legend>
               <ul class="team-pick">
                 <% list.forEach(function (t) { %>
-                  <li data-team data-created="<%= t.created ? String(t.created).slice(0, 10) : '' %>" data-status="<%= t.status || '' %>"><label><input type="checkbox" name="team_ids" value="<%= t.id %>"> <%= t.name %>
+                  <li><label><input type="checkbox" name="team_ids" value="<%= t.id %>"> <%= t.name %>
                     <span class="small muted"><%= [t.created ? `created ${fmtDate(String(t.created).slice(0, 10))}` : null, t.status && unfiltered ? t.status : null, imported.has(t.id) ? 'imported' : null].filter(Boolean).join(' · ') %></span></label></li>
                 <% }) %>
               </ul>

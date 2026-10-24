@@ -7,9 +7,9 @@
   <title><%= title ? `${title} · ${appName}` : appName %></title>
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
   <link rel="preload" href="/static/fonts/oswald-latin-700-normal.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="/static/css/app.css">
-  <script src="/static/js/password-policy.js" defer></script>
-  <script src="/static/js/app.js" defer></script>
+  <link rel="stylesheet" href="<%= asset('css/app.css') %>">
+  <script src="<%= asset('js/password-policy.js') %>" defer></script>
+  <script src="<%= asset('js/app.js') %>" defer></script>
 </head>
 <body>
 <div class="rink-bg" aria-hidden="true"></div>

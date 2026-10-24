@@ -243,7 +243,28 @@ router.get('/sportsengine/teams', async (req, res) => {
       (t) => t.external_id.slice(3)
     )
   );
-  res.render('admin/sportsengine', { title: 'SportsEngine', step: 'teams', seSeason, result, error, localSeasons, linked, imported });
+  // When SportsEngine can't say which season a team is in, narrow the list by created date and status.
+  // First visit defaults to teams created up to ~4 months before the season starts, and active teams.
+  let filters = null;
+  if (result && result.filter === 'none' && result.teams.some((t) => t.created || t.status)) {
+    const applied = req.query.applied === '1';
+    const statuses = [...new Set(result.teams.map((t) => t.status).filter(Boolean))].sort();
+    let since = parseDate(req.query.created_since);
+    if (!applied && !since && seSeason.start_date) {
+      const d = new Date(`${seSeason.start_date}T00:00:00Z`);
+      d.setUTCMonth(d.getUTCMonth() - 4);
+      since = d.toISOString().slice(0, 10);
+    }
+    let status = statuses.includes(req.query.status) ? req.query.status : null;
+    if (!applied && !status) status = statuses.find((s) => /^active$/i.test(s)) || null;
+    const total = result.teams.length;
+    const hasCreated = result.teams.some((t) => t.created);
+    result.teams = result.teams.filter(
+      (t) => (!since || !t.created || String(t.created).slice(0, 10) >= since) && (!status || t.status === status)
+    );
+    filters = { since, status, statuses, total, hasCreated };
+  }
+  res.render('admin/sportsengine', { title: 'SportsEngine', step: 'teams', seSeason, result, error, localSeasons, linked, imported, filters });
 });
 
 // Step 3: import the selected teams' rosters into a local season.

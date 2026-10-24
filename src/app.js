@@ -52,6 +52,23 @@ function createApp() {
   // Signed provider webhooks need the raw body, so they're mounted before the body parsers and CSRF.
   app.use(require('./routes/webhooks'));
 
+  // Asset URLs carry a hash of the file, so browsers fetch new JS/CSS as soon as a deploy changes it
+  // (the files are otherwise cached for a week).
+  const publicDir = path.join(__dirname, '..', 'public');
+  const assetHashes = new Map();
+  const asset = (file) => {
+    if (!assetHashes.has(file)) {
+      let v = '';
+      try {
+        v = require('crypto').createHash('sha256').update(require('fs').readFileSync(path.join(publicDir, file))).digest('hex').slice(0, 10);
+      } catch {
+        // missing file: serve the bare URL
+      }
+      assetHashes.set(file, v ? `/static/${file}?v=${v}` : `/static/${file}`);
+    }
+    return assetHashes.get(file);
+  };
+
   app.use('/static', express.static(path.join(__dirname, '..', 'public'), { maxAge: config.isProd ? '7d' : 0 }));
   app.get('/favicon.ico', (req, res) => res.redirect(301, '/static/favicon.svg'));
 
@@ -77,6 +94,7 @@ function createApp() {
 
   app.use((req, res, next) => {
     res.locals.appName = config.appName;
+    res.locals.asset = asset;
     res.locals.path = req.path;
     res.locals.url = req.originalUrl;
     res.locals.levels = levels;

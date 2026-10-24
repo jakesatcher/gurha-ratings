@@ -338,6 +338,32 @@ test('admin imports SportsEngine seasons and teams; players carry across seasons
   assert.strictEqual((await h.db.one('SELECT count(*)::int AS n FROM players')).n, 3);
 });
 
+test('teams page filters by created date and status on the server when teams have no season link', async () => {
+  await h.resetDb();
+  const app = h.createApp();
+  await h.createUser({ email: 'se-filter@test.com', name: 'SE Filter', role: 'admin' });
+  const admin = await h.login(app, 'se-filter@test.com');
+  await withApi(`
+    type Query { teams(organizationId: Int!, page: Int, perPage: Int): TeamPage }
+  ${TEAM_SDL}`, teamsRoot, async () => {
+    const ids = (html) => [...html.matchAll(/name="team_ids" value="([^"]+)"/g)].map((m) => m[1]).sort();
+    // First visit: defaults to ~4 months before the season start and active teams
+    const first = await admin.get('/admin/sportsengine/teams?season=70&name=Fall%202026&start=2026-09-01');
+    assert.match(first.text, /Apply filters/);
+    assert.match(first.text, /name="created_since" value="2026-05-01"/);
+    assert.deepStrictEqual(ids(first.text), ['n1', 'n2']);
+    assert.match(first.text, /2 of 3 teams shown/);
+    // Apply a different date and any status
+    const wider = await admin.get('/admin/sportsengine/teams?season=70&name=Fall%202026&start=2026-09-01&applied=1&created_since=2025-01-01&status=');
+    assert.deepStrictEqual(ids(wider.text), ['n1', 'n2', 'o1']);
+    // Inactive only
+    const inactive = await admin.get('/admin/sportsengine/teams?season=70&applied=1&created_since=&status=inactive');
+    assert.deepStrictEqual(ids(inactive.text), ['o1']);
+    // Asset URLs are versioned so a deploy's new JS/CSS is picked up right away
+    assert.match(first.text, /\/static\/js\/app\.js\?v=[0-9a-f]{10}/);
+  });
+});
+
 test('surfaces GraphQL errors from a custom query', async () => {
   const se = require('../src/lib/sportsengine');
   config.sportsEngine.rosterQuery = 'query { teams(organizationId: "org-42", seasonId: "x") { results { id } } }';
