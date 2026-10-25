@@ -1,7 +1,7 @@
 'use strict';
 
 const db = require('../db');
-const { levelForScore, levelIndex, isLevel, gradeByKey, roundHalfUp, LEVELS, MAX_POINTS } = require('./levels');
+const { levelForScore, levelIndex, gradeByKey, roundHalfUp, MAX_POINTS } = require('./levels');
 
 const ALREADY_RATED_MESSAGE =
   'You already rated this player. If you feel this is an error, or would like to change your rating, please contact an Admin';
@@ -43,8 +43,8 @@ function cleanText(v, max = 4000) {
 }
 
 // Validates a submitted rating form. Returns { errors, data, scores }.
-// Fields: score_{categoryId} = a grade key ("D2:M", "BEG", "A"), comment_{categoryId} (optional),
-// final_level = the rater's recommended level, evidence = observation notes.
+// Fields: score_{categoryId} = a grade key ("D2:M", "BEG", "A"), evidence = the rater's comments.
+// The level comes only from the scores; raters no longer give a separate recommended level.
 function parseRatingForm(body, categories) {
   const errors = [];
   const scores = [];
@@ -54,7 +54,7 @@ function parseRatingForm(body, categories) {
       errors.push(`${cat.name}: choose a level (and Low, Medium or High).`);
       continue;
     }
-    scores.push({ category_id: cat.id, grade: grade.key, score: grade.points, comment: cleanText(body[`comment_${cat.id}`], 2000) });
+    scores.push({ category_id: cat.id, grade: grade.key, score: grade.points, comment: null });
   }
 
   // Sections dropped from the form are cleared so an admin edit of an older rating leaves nothing stale.
@@ -74,10 +74,9 @@ function parseRatingForm(body, categories) {
     evidence: cleanText(body.evidence),
     strengths: null,
     improvements: null,
-    final_level: isLevel(body.final_level) ? body.final_level : null,
+    final_level: null,
     scale: 2,
   };
-  if (!data.final_level) errors.push('Choose your rater recommendation.');
 
   return { errors, data, scores };
 }
@@ -174,7 +173,8 @@ async function loadRatings({ playerIds, ratingId, seasonId } = {}) {
     r.disqualified = Boolean(r.disqualified_at);
     r.overall = weightedOverall(r.scores, categories);
     r.calculated_level = r.legacy ? null : levelForScore(r.overall);
-    r.effective_level = r.final_level || r.calculated_level;
+    // Older ratings may carry a rater-recommended level; current ratings are judged by their scores.
+    r.effective_level = r.legacy ? r.final_level : r.calculated_level;
   }
   return { ratings, categories };
 }
@@ -194,11 +194,9 @@ function summarize(allRatings, categories, player = {}) {
   const avgOverall = overalls.length ? roundHalfUp(overalls.reduce((a, b) => a + b, 0) / overalls.length, 2) : null;
 
   const finalIdx = ratings.map((r) => levelIndex(r.effective_level)).filter((v) => v !== null);
-  const avgFinalIdx = finalIdx.length ? finalIdx.reduce((a, b) => a + b, 0) / finalIdx.length : null;
   const levelSpread = finalIdx.length > 1 ? Math.max(...finalIdx) - Math.min(...finalIdx) : 0;
 
   const calculatedLevel = levelForScore(avgOverall);
-  const recommendedLevel = avgFinalIdx === null ? null : LEVELS[roundHalfUp(avgFinalIdx)];
   return {
     count,
     legacyCount,
@@ -206,7 +204,6 @@ function summarize(allRatings, categories, player = {}) {
     categoryAverages,
     avgOverall,
     calculatedLevel,
-    recommendedLevel,
     level: player.level_override || calculatedLevel,
     overridden: Boolean(player.level_override),
     levelSpread,

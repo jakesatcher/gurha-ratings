@@ -73,7 +73,6 @@
         missing.push(legend ? legend.textContent.replace(/\s+/g, ' ').trim() : 'a category');
       }
     });
-    if (!form.querySelector('input[name="final_level"]:checked')) missing.push('Rater recommendation');
     if (missing.length) {
       e.preventDefault();
       window.alert('Please complete: \n• ' + missing.join('\n• '));

@@ -42,7 +42,7 @@
       <% myRatings.forEach(function (r) { %>
         <li><a href="/players/<%= r.player_id %>"><%= r.first_name %> <%= r.last_name %></a>
           <span class="muted"><%= r.season_name %> · <%= r.team || '' %><%= r.jersey_number ? ` #${r.jersey_number}` : '' %> · <%= fmtDate(r.created_at) %></span>
-          <%- include('../partials/level', { level: r.final_level }) %></li>
+          <% if (r.scale === 1) { %><span class="tag">old 0–11 scale</span><% } else { %><%- include('../partials/level', { level: levels.levelForScore(r.overall) }) %><% } %></li>
       <% }) %>
     </ul>
   <% } %>

@@ -76,8 +76,6 @@
         </div>
       <% }) %>
     </div>
-    <label class="comment-label">Comments <small class="muted">(optional)</small>
-      <textarea name="comment_<%= c.id %>" rows="2" maxlength="2000"><%= val(`comment_${c.id}`) %></textarea></label>
   </fieldset>
   <% }) %>
 
@@ -88,24 +86,14 @@
   </section>
 
   <section class="card">
-    <h2><label for="evidence">Observation notes</label></h2>
-    <p class="small muted">What you saw: strengths and limitations, rather than simply "good" or "bad". E.g. "Strong forward skating and puck protection. Good passing. Backward skating and defensive positioning are weaker."</p>
+    <h2><label for="evidence">Comments</label></h2>
+    <p class="small muted">Optional. Anything that explains your ratings: strengths, limitations, what you saw in games.</p>
     <textarea id="evidence" name="evidence" rows="4" maxlength="4000"><%= val('evidence') %></textarea>
-  </section>
-
-  <fieldset class="card final">
-    <legend><h2>Rater recommendation</h2></legend>
-    <p>What level do you recommend for this player? <span class="small muted">This doesn't change the score; admins review it alongside the ratings.</span></p>
-    <div class="level-picker" role="radiogroup" aria-label="Rater recommendation">
-      <% levels.LEVELS.forEach(function (l) { %>
-        <label class="chip level-chip level-<%= levels.levelTier(l) %>"><input type="radio" name="final_level" value="<%= l %>" <%= has('final_level', l) ? 'checked' : '' %>><span><%= l %></span></label>
-      <% }) %>
-    </div>
     <% if (isEdit) { %>
       <label>Reason for the change <small class="muted">(required; recorded in the audit log)</small>
         <input name="admin_reason" maxlength="1000" value="<%= val('admin_reason') %>" required></label>
     <% } %>
-  </fieldset>
+  </section>
 
   <div class="submit-bar">
     <div class="submit-calc"><span class="small muted">Overall</span> <strong id="bar-score">—</strong> <span id="bar-level" class="level level-none">—</span></div>

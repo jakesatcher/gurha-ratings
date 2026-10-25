@@ -43,8 +43,7 @@
         <th class="jersey">Jersey</th>
         <th class="player">Player</th>
         <% cats.forEach(function (c) { %><th class="score"><%= c.name %><small><%= Number(c.weight) %>% · points</small></th><% }) %>
-        <th class="lvl">Recommend<small>level</small></th>
-        <th class="notes">Observation notes</th>
+        <th class="notes">Comments</th>
       </tr>
     </thead>
     <tbody>
@@ -54,7 +53,6 @@
         <td class="jersey"><%= p && p.jersey_number ? p.jersey_number : '' %></td>
         <td class="player"><% if (p) { %><%= p.last_name %>, <%= p.first_name %><%= p.is_sub ? ' (sub)' : '' %><% } else { %><span class="write-in">write in name</span><% } %></td>
         <% cats.forEach(function () { %><td class="score"></td><% }) %>
-        <td class="lvl"></td>
         <td class="notes"></td>
       </tr>
       <% }) %>
@@ -65,7 +63,6 @@
     <table class="scale-key"><tr><th>Write the points</th><% levels.BANDS.forEach(function (b) { %><th><%= b.level %></th><% }) %></tr>
       <tr><td>Low / Medium / High</td><% levels.BANDS.forEach(function (b) { %><td><%= Object.values(b.points).join(' / ') %></td><% }) %></tr></table>
     <p>For each category pick the level the player shows and whether they're low, mid or high in it, and write that number (Beginner 0, A 15).
-      <strong>Recommend:</strong> the level you'd place the player at (<%= levels.LEVELS.join(', ') %>).
       Rate what you see, not what you think. Leave a row blank if you haven't seen the player.
       Signature <i class="sig"></i></p>
     <p class="code-foot"><%= form.code %> · page <%= pi + 1 %>/<%= totalPages %></p>

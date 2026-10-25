@@ -47,15 +47,15 @@ test('levels: Low/Mid/High grades carry the agreed points and scores map back to
   assert.deepStrictEqual(['c2', 'D1', 'b', 'beginner', 'x'].map(normalizeLevel), ['D1/C2', 'D1/C2', 'B1/A2', 'BEG', null]);
 });
 
-test('rating form takes a grade per category and one recommendation', () => {
+test('rating form takes a grade per category and one comments box', () => {
   const cats = [{ id: 1, name: 'Skating', weight: 50 }, { id: 2, name: 'Passing', weight: 50 }];
-  const ok = parseRatingForm({ score_1: 'D3:M', score_2: 'A', final_level: 'D2', evidence: 'Quick' }, cats);
+  const ok = parseRatingForm({ score_1: 'D3:M', score_2: 'A', evidence: 'Quick' }, cats);
   assert.deepStrictEqual(ok.errors, []);
   assert.deepStrictEqual(ok.scores.map((s) => [s.grade, s.score]), [['D3:M', 1.5], ['A', 15]]);
   assert.strictEqual(weightedOverall(ok.scores, cats), 8.25);
-  assert.deepStrictEqual([ok.data.final_level, ok.data.evidence, ok.data.game_performance], ['D2', 'Quick', null]);
-  const bad = parseRatingForm({ score_1: 'BEG:L', final_level: 'C3' }, cats);
-  assert.strictEqual(bad.errors.length, 3);
+  assert.deepStrictEqual([ok.data.final_level, ok.data.evidence, ok.data.game_performance], [null, 'Quick', null]);
+  const bad = parseRatingForm({ score_1: 'BEG:L' }, cats);
+  assert.strictEqual(bad.errors.length, 2);
 });
 
 test('weighted overall follows the GURHA formula', () => {

@@ -37,7 +37,7 @@ People choose **Rater** or **Viewer** when they request access. The admin alert 
   | Hockey IQ / Awareness | 20% |
   | Game Execution | 10% |
 
-  The form also has optional per-category comments, **Observation notes**, and a **Rater recommendation** (a level, no points). The overall score and level update live as you score.
+  The form ends with one optional **Comments** box. The overall score and level update live as you score.
 - **One rating per player per rater, per season.** This is enforced in the database. Submitting again in the same season shows:
   > You already rated this player. If you feel this is an error, or would like to change your rating, please contact an Admin
 - View submitted ratings and averages. Other raters show as "Rater 1", "Rater 2" by default.
@@ -69,11 +69,10 @@ Raters rate each category by level, then **Low / Mid / High** within it. Each ch
 - **Rating overall** = Σ(points × weight) ÷ Σ(weights), 0–15. With the default weights: `(Skating × .25) + (Puck × .20) + (Passing × .15) + (Shooting × .10) + (IQ × .20) + (Execution × .10)`.
 - **Calculated level**: round the overall to the nearest whole point using standard rounding (.5 and up rounds up, so 2.4 → 2 = D3 and 2.5 → 3 = D2), then take the level that point value belongs to (0 BEG, 1–2 D3, 3–5 D2, 6–8 D1/C2, 9–11 C1/B2, 12–14 B1/A2, 15 A). Displayed scores are rounded to 2 decimals the same way.
 - **Player final rating** (per season) = the average of all raters' overall scores that season. The player's level comes from that average, unless an admin set an override for that season.
-- **Rater recommendation** = each rater's recommended level (no points; for admins to review). The player page shows their average.
-- **3rd review flag**: raters' recommended levels differ by ≥ 2 levels.
+- **3rd review flag**: raters' calculated levels for the player differ by ≥ 2 levels.
 - Ratings made on the old 0–11 scale are still shown (tagged "old 0–11 scale") but don't count toward any average. An admin can edit one to re-score it on the new scale, or delete it so the rater can rate again.
 
-The form also has an optional comment per category and one **Observation notes** box.
+The form has one optional **Comments** box. Admins can still set a final level override per season.
 
 ## Deploying on Railway
 
@@ -190,7 +189,7 @@ After upload, the review page shows every row's match (**Existing**, **New**, **
 For raters who'd rather not create an account. **Admin → Paper forms** (or **Print paper form** on a team page):
 
 1. **Print.** Pick one or more teams; each gets a numbered form (e.g. `PF-0007`) listing the whole roster, about 10 players per landscape Letter page, with a few blank write-in rows and an optional rating-guide page. Each page carries the form code and page number so scans can be matched up.
-2. **Fill in.** Raters write their name, the points for each category (from the scale key on the sheet: e.g. D2 Mid = 4), a recommended level and observation notes. Blank rows are fine; they're skipped.
+2. **Fill in.** Raters write their name, the points for each category (from the scale key on the sheet: e.g. D2 Mid = 4), and any comments. Blank rows are fine; they're skipped.
 3. **Enter.** Only admins can enter sheets. Open the form → **Enter a filled-in sheet**, choose the rater (or create a *paper rater* by name, optional email), optionally attach the scan or photo (PDF, JPEG, PNG, WebP, HEIC; 10 MB max), and type the grid in. Overall scores calculate as you type. Partly filled rows and numbers that aren't on the scale are rejected with a row-by-row list.
 
 Paper ratings follow the same once-per-season rule: if that rater already rated a player (online or on another sheet), the row is skipped and reported, and the existing rating stays (admins can edit it from the player page). Ratings show a **paper** tag (admins see the form code). Scans are stored in the database and only admins can view them.

@@ -13,7 +13,10 @@ const router = express.Router();
 
 router.get('/account', requireAuth, async (req, res) => {
   const myRatings = await db.many(
-    `SELECT r.id, r.created_at, r.final_level, s.name AS season_name, p.id AS player_id, p.first_name, p.last_name,
+    `SELECT r.id, r.created_at, r.scale,
+            (SELECT sum(rs.score * c.weight) / nullif(sum(c.weight), 0) FROM rating_scores rs JOIN categories c ON c.id = rs.category_id
+              WHERE rs.rating_id = r.id AND c.active) AS overall,
+            s.name AS season_name, p.id AS player_id, p.first_name, p.last_name,
             (SELECT string_agg(t.name, ', ' ORDER BY tr.is_sub, t.name) FROM season_players sp
                JOIN team_rosters tr ON tr.season_player_id = sp.id JOIN teams t ON t.id = tr.team_id
               WHERE sp.season_id = r.season_id AND sp.player_id = r.player_id) AS team,

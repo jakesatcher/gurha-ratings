@@ -63,7 +63,7 @@ async function loadForm(id) {
 }
 
 // Reads the entry grid. Row fields: r{i}_player (write-in rows), r{i}_s{categoryId} (the points the
-// rater wrote: 0, 1, 1.5, 2, 3 … 15), r{i}_rec (recommended level), r{i}_notes. Blank rows are
+// rater wrote: 0, 1, 1.5, 2, 3 … 15) and r{i}_notes (comments). Blank rows are
 // skipped; partly filled rows are errors.
 function parseGrid(body, form) {
   const rows = [];
@@ -72,7 +72,7 @@ function parseGrid(body, form) {
   for (let i = 0; i < form.rowCount; i++) {
     const printed = form.players[i] || null;
     const get = (k) => String(body[`r${i}_${k}`] ?? '').trim();
-    const fields = [...form.categories.map((c) => get(`s${c.id}`)), get('rec'), get('notes')];
+    const fields = [...form.categories.map((c) => get(`s${c.id}`)), get('notes')];
     const writeIn = printed ? null : Number(get('player')) || null;
     if (!fields.some(Boolean) && !writeIn) continue; // untouched row
     const label = printed ? `Row ${i + 1} (${printed.first_name} ${printed.last_name})` : `Row ${i + 1} (write-in)`;
@@ -87,18 +87,17 @@ function parseGrid(body, form) {
     }
     seen.add(playerId);
     const rowErrors = [];
-    const formBody = { evidence: get('notes'), final_level: L.normalizeLevel(get('rec')) || '' };
+    const formBody = { evidence: get('notes') };
     for (const c of form.categories) {
       const raw = get(`s${c.id}`);
       const grade = raw === '' ? null : L.gradeForPoints(raw);
       if (raw !== '' && !grade) rowErrors.push(`${c.name}: "${raw}" isn't a scale value (0, 1, 1.5, 2, 3–15).`);
       formBody[`score_${c.id}`] = grade ? grade.key : '';
     }
-    if (get('rec') && !formBody.final_level) rowErrors.push(`Recommendation "${get('rec')}" isn't a GURHA level.`);
     const parsed = R.parseRatingForm(formBody, form.categories);
     // Don't repeat "choose a level" for a cell already reported as unreadable.
     const said = new Set(rowErrors.map((e) => e.split(':')[0].split(' "')[0]));
-    const all = [...rowErrors, ...parsed.errors.filter((e) => !said.has(e.split(':')[0]) && !(said.has('Recommendation') && /recommendation/i.test(e)))];
+    const all = [...rowErrors, ...parsed.errors.filter((e) => !said.has(e.split(':')[0]))];
     if (all.length) {
       errors.push(`${label}: ${[...new Set(all)].join(' ')}`);
       continue;

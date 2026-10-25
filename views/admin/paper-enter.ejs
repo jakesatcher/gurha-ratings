@@ -46,12 +46,12 @@
 
   <section class="card">
     <h2>Ratings</h2>
-    <p class="small muted">Type the points the rater wrote for each category (low/mid/high): <%= levels.BANDS.map(b => `${b.level} ${Object.values(b.points).join('/')}`).join(' · ') %>. Recommendation: <%= levels.LEVELS.join(', ') %> (C2 or D1 also work). Overall is calculated as you type.</p>
+    <p class="small muted">Type the points the rater wrote for each category (low/mid/high): <%= levels.BANDS.map(b => `${b.level} ${Object.values(b.points).join('/')}`).join(' · ') %>. Overall is calculated as you type.</p>
     <div class="table-wrap"><table class="table compact paper-grid">
       <thead><tr>
         <th>#</th><th>Player</th>
         <% cats.forEach(function (c) { %><th title="<%= c.name %> (<%= Number(c.weight) %>%)"><%= c.name %></th><% }) %>
-        <th>Overall</th><th>Recommendation</th><th>Observation notes</th>
+        <th>Overall</th><th>Comments</th>
       </tr></thead>
       <tbody>
         <% for (let i = 0; i < form.rowCount; i++) { const p = form.players[i]; %>
@@ -71,13 +71,11 @@
             <td><input class="cell" type="number" inputmode="decimal" min="0" max="<%= levels.MAX_POINTS %>" step="0.5" name="r<%= i %>_s<%= c.id %>" value="<%= val(`r${i}_s${c.id}`) %>" aria-label="Row <%= i + 1 %> <%= c.name %>" data-cat="<%= c.id %>"></td>
           <% }) %>
           <td class="nowrap" data-overall>—</td>
-          <td><input class="cell cell-lvl" name="r<%= i %>_rec" list="paper-levels" maxlength="12" value="<%= val(`r${i}_rec`) %>" aria-label="Row <%= i + 1 %> recommendation" autocapitalize="characters"></td>
-          <td><input class="cell-notes" name="r<%= i %>_notes" maxlength="4000" value="<%= val(`r${i}_notes`) %>" aria-label="Row <%= i + 1 %> notes"></td>
+          <td><input class="cell-notes" name="r<%= i %>_notes" maxlength="4000" value="<%= val(`r${i}_notes`) %>" aria-label="Row <%= i + 1 %> comments"></td>
         </tr>
         <% } %>
       </tbody>
     </table></div>
-    <datalist id="paper-levels"><% levels.LEVELS.forEach(function (l) { %><option value="<%= l %>"><% }) %></datalist>
   </section>
 
   <p class="small muted">If this rater already rated a player this season (online or on another sheet), that row is skipped and the existing rating is kept. Admins can edit it from the player page.</p>

@@ -549,7 +549,6 @@ function ratingToValues(r) {
   const v = { ...r };
   for (const s of r.scores) {
     if (s.grade) v[`score_${s.category_id}`] = s.grade; // older 0–11 ratings have no grade to pre-select
-    v[`comment_${s.category_id}`] = s.comment || '';
   }
   return v;
 }
@@ -567,14 +566,14 @@ router.post('/ratings/:id', async (req, res) => {
       title: `Edit rating – ${player.first_name} ${player.last_name}`, player, categories, values: req.body, errors, mode: 'edit', rating, R,
     });
   }
-  const before = { overall: rating.overall, final_level: rating.final_level, scores: rating.scores.map((s) => [s.category_id, s.score]) };
+  const before = { overall: rating.overall, scores: rating.scores.map((s) => [s.category_id, s.score]) };
   await db.tx(async (c) => {
     await R.updateRating(c, rating.id, req.user.id, data, scores);
     await audit(req.user.id, 'rating_updated', 'rating', rating.id, {
       player_id: rating.player_id,
       rater_id: rating.rater_id,
       before,
-      after: { final_level: data.final_level, scores: scores.map((s) => [s.category_id, s.score]) },
+      after: { scores: scores.map((s) => [s.category_id, s.score]) },
       reason,
     }, c);
   });
@@ -712,7 +711,7 @@ router.get('/export.csv', async (req, res) => {
   const categories = await R.getCategories();
   const summaries = await R.summariesForPlayers(players, req.season.id);
   const header = ['season', 'player_id', 'first_name', 'last_name', 'jersey_number', 'team', 'division', 'all_teams', 'position', 'active', 'ratings_count',
-    ...categories.map((c) => `avg_${c.key}`), 'avg_overall', 'calculated_level', 'avg_recommended_level', 'level_override', 'final_level', 'needs_third_review'];
+    ...categories.map((c) => `avg_${c.key}`), 'avg_overall', 'calculated_level', 'level_override', 'final_level', 'needs_third_review'];
   const lines = [header.join(',')];
   for (const p of players) {
     const s = summaries.get(p.id);
@@ -720,7 +719,7 @@ router.get('/export.csv', async (req, res) => {
       req.season.name, p.id, p.first_name, p.last_name, p.jersey_number, p.team, p.division,
       p.memberships.map((m) => `${m.team || 'No team'}${m.jersey_number ? ` #${m.jersey_number}` : ''}${m.is_sub ? ' (sub)' : ''}`).join('; '),
       p.position, p.active, s.count,
-      ...categories.map((c) => s.categoryAverages[c.id]), s.avgOverall, s.calculatedLevel, s.recommendedLevel, p.level_override, s.level,
+      ...categories.map((c) => s.categoryAverages[c.id]), s.avgOverall, s.calculatedLevel, p.level_override, s.level,
       s.needsReview,
     ].map(csvCell).join(','));
   }

@@ -63,7 +63,6 @@
     </div>
     <dl class="dl dl-inline">
       <dt>Weighted overall</dt><dd><strong><%= fmt(summary.avgOverall) %></strong> / <%= levels.MAX_POINTS %> → <%- include('../partials/level', { level: summary.calculatedLevel }) %></dd>
-      <dt>Rater recommendation</dt><dd><%- include('../partials/level', { level: summary.recommendedLevel }) %> <span class="muted small">(average of raters' recommended levels)</span></dd>
       <% if (summary.overridden) { %>
         <dt>Admin final level</dt><dd><%- include('../partials/level', { level: player.level_override }) %> <span class="muted small"><%= player.level_override_note || '' %></span></dd>
       <% } %>
@@ -133,12 +132,13 @@
         <div class="alert alert-warn">Disqualified<%= isAdmin && r.disqualified_by_name ? ` by ${r.disqualified_by_name}` : '' %> on <%= fmtDate(r.disqualified_at) %>. Not counted toward averages.<% if (isAdmin) { %><br><strong>Reason:</strong> <%= r.disqualified_reason %><% } %></div>
       <% } %>
       <table class="table compact">
-        <thead><tr><th>Category</th><th>Rating</th><th class="num">Points</th><th>Comments</th></tr></thead>
+        <% const catNotes = r.scores.some(x => x.comment); %>
+        <thead><tr><th>Category</th><th>Rating</th><th class="num">Points</th><% if (catNotes) { %><th>Comments</th><% } %></tr></thead>
         <tbody>
           <% categories.forEach(function (c) { const s = r.scoreMap[c.id]; %>
             <tr><td><%= c.name %></td>
               <td class="grade-tag"><% if (s && s.gradeInfo) { %><%- include('../partials/level', { level: s.gradeInfo.level }) %> <%= s.gradeInfo.step ? levels.STEP_NAMES[s.gradeInfo.step] : '' %><% } else { %>—<% } %></td>
-              <td class="num"><%= s ? fmt(s.score, 1) : '—' %></td><td><%= s && s.comment ? s.comment : '' %></td></tr>
+              <td class="num"><%= s ? fmt(s.score, 1) : '—' %></td><% if (catNotes) { %><td><%= s && s.comment ? s.comment : '' %></td><% } %></tr>
           <% }) %>
         </tbody>
       </table>
@@ -148,8 +148,8 @@
         <% } else { %>
           <dt>Calculated</dt><dd><%= fmt(r.overall) %> / <%= levels.MAX_POINTS %> → <%- include('../partials/level', { level: r.calculated_level }) %></dd>
         <% } %>
-        <dt>Rater recommendation</dt><dd><%- include('../partials/level', { level: r.final_level }) %></dd>
-        <% if (r.evidence) { %><dt>Observation notes</dt><dd class="pre"><%= r.evidence %></dd><% } %>
+        <% if (r.legacy && r.final_level) { %><dt>Rater's level</dt><dd><%- include('../partials/level', { level: r.final_level }) %></dd><% } %>
+        <% if (r.evidence) { %><dt>Comments</dt><dd class="pre"><%= r.evidence %></dd><% } %>
         <% if (r.legacy && r.strengths) { %><dt>Strengths</dt><dd class="pre"><%= r.strengths %></dd><% } %>
         <% if (r.legacy && r.improvements) { %><dt>To improve</dt><dd class="pre"><%= r.improvements %></dd><% } %>
       </dl>
