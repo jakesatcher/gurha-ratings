@@ -8,18 +8,23 @@ const ALREADY = 'You already rated this player. If you feel this is an error, or
 
 function fullRating(overrides = {}) {
   return {
-    // 8, 7, 6, 5, 7, 6 points → weighted 6.80 (D1/C2)
-    score_1: 'D1/C2:H', score_2: 'D1/C2:M', score_3: 'D1/C2:L', score_4: 'D2:H', score_5: 'D1/C2:M', score_6: 'D1/C2:L',
+    // One overall rating: D1/C2 Medium = 7 points
+    [S]: 'D1/C2:M',
     evidence: 'Good skater',
     ...overrides,
   };
 }
 
 let app;
+// The single "Overall rating" category (the six old categories are inactive).
+let OVERALL;
+let S;
 
 test.before(async () => {
   await h.resetDb();
   app = h.createApp();
+  OVERALL = (await h.db.one(`SELECT id FROM categories WHERE key = 'overall'`)).id;
+  S = `score_${OVERALL}`;
 });
 
 test.after(async () => {
@@ -92,7 +97,7 @@ test('access request → admin approval → MFA → rating once → duplicate er
   assert.strictEqual(incomplete.status, 422);
 
   // Score out of range is rejected
-  const outOfRange = await h.post(raterAgent, `/players/${player.id}/rate`, fullRating({ score_1: 'D1/C2:X' }));
+  const outOfRange = await h.post(raterAgent, `/players/${player.id}/rate`, fullRating({ [S]: 'D1/C2:X' }));
   assert.strictEqual(outOfRange.status, 422);
 
   // Rate
@@ -100,7 +105,7 @@ test('access request → admin approval → MFA → rating once → duplicate er
   assert.strictEqual(rate.status, 302);
 
   // Duplicate submission → exact error message
-  const dup = await h.post(raterAgent, `/players/${player.id}/rate`, fullRating({ score_1: 'A' }));
+  const dup = await h.post(raterAgent, `/players/${player.id}/rate`, fullRating({ [S]: 'A' }));
   assert.strictEqual(dup.status, 409);
   assert.ok(dup.text.includes(ALREADY), 'duplicate POST shows required message');
   const dupGet = await raterAgent.get(`/players/${player.id}/rate`);
@@ -108,11 +113,12 @@ test('access request → admin approval → MFA → rating once → duplicate er
   assert.ok(dupGet.text.includes(ALREADY), 'revisiting the form shows required message');
   assert.strictEqual((await h.db.one('SELECT count(*)::int AS n FROM ratings')).n, 1);
 
-  // Player page shows the weighted average (6.80 → D1/C2) and the chosen grades
+  // Player page shows the average (7.00 → D1/C2), the chosen grade, and no separate categories
   const show = await raterAgent.get(`/players/${player.id}`);
-  assert.match(show.text, /6\.80/);
+  assert.match(show.text, /7\.00/);
   assert.match(show.text, /level-dc[^>]*>D1\/C2</);
-  assert.match(show.text, /D1\/C2<\/span>\s*High/);
+  assert.match(show.text, /D1\/C2<\/span>\s*Medium/);
+  assert.doesNotMatch(show.text, /Skating|Puck Skills/);
   assert.match(show.text, /Comments/);
   assert.match(show.text, /Good skater/);
   assert.doesNotMatch(show.text, /Rater recommendation|Observation notes/);
@@ -120,12 +126,12 @@ test('access request → admin approval → MFA → rating once → duplicate er
 
   // Rater cannot edit ratings
   const rating = await h.db.one('SELECT id FROM ratings');
-  assert.strictEqual((await h.post(raterAgent, `/admin/ratings/${rating.id}`, fullRating({ score_1: 'C1/B2:H' }))).status, 403);
+  assert.strictEqual((await h.post(raterAgent, `/admin/ratings/${rating.id}`, fullRating({ [S]: 'C1/B2:H' }))).status, 403);
 
   // Admin can edit; audit is recorded
-  const edit = await h.post(adminAgent, `/admin/ratings/${rating.id}`, fullRating({ score_1: 'C1/B2:M', admin_reason: 'Rater asked' }), `/admin/ratings/${rating.id}/edit`);
+  const edit = await h.post(adminAgent, `/admin/ratings/${rating.id}`, fullRating({ [S]: 'C1/B2:M', admin_reason: 'Rater asked' }), `/admin/ratings/${rating.id}/edit`);
   assert.strictEqual(edit.status, 302);
-  const edited = await h.db.one('SELECT score, grade FROM rating_scores WHERE rating_id = $1 AND category_id = 1', [rating.id]);
+  const edited = await h.db.one('SELECT score, grade FROM rating_scores WHERE rating_id = $1 AND category_id = $2', [rating.id, OVERALL]);
   assert.deepStrictEqual([Number(edited.score), edited.grade], [10, 'C1/B2:M']);
   const log = await h.db.one(`SELECT details FROM audit_log WHERE action = 'rating_updated'`);
   assert.strictEqual(log.details.reason, 'Rater asked');
@@ -133,7 +139,7 @@ test('access request → admin approval → MFA → rating once → duplicate er
   // Second rater differs by 2+ levels → flagged for third review
   await h.createUser({ email: 'second@test.com', name: 'Second' });
   const second = await h.login(app, 'second@test.com');
-  const r2 = await h.post(second, `/players/${player.id}/rate`, fullRating({ score_1: 'D3:M', score_2: 'D3:M', score_3: 'D3:M', score_4: 'D3:M', score_5: 'D3:M', score_6: 'D3:M' }));
+  const r2 = await h.post(second, `/players/${player.id}/rate`, fullRating({ [S]: 'D3:M' }));
   assert.strictEqual(r2.status, 302);
   const review = await second.get('/players?status=review');
   assert.match(review.text, /Example, Wayne/);
@@ -156,7 +162,7 @@ test('access request → admin approval → MFA → rating once → duplicate er
   // CSV export is admin only
   assert.strictEqual((await raterAgent.get('/admin/export.csv')).status, 403);
   const csv = await adminAgent.get('/admin/export.csv');
-  assert.match(csv.text, /avg_skating/);
+  assert.match(csv.text, /avg_overall/);
 
   // Disabling a user signs them out
   await h.post(adminAgent, `/admin/users/${rater.id}/disable`, {}, '/admin/users');
@@ -231,7 +237,7 @@ test('seasons: re-rate each season, closed seasons, roster copy and history', as
 
   await h.post(admin, '/admin/players', { first_name: 'Sid', last_name: 'Season', jersey_number: '87', team: 'Penguins', position: 'F' }, '/admin/players/new');
   const sid = await h.db.one(`SELECT id FROM players WHERE last_name = 'Season'`);
-  assert.strictEqual((await h.post(rater, `/players/${sid.id}/rate`, fullRating({ score_1: 'D2:H', score_2: 'D2:H', score_3: 'D2:H', score_4: 'D2:H', score_5: 'D2:H', score_6: 'D2:H'}))).status, 302);
+  assert.strictEqual((await h.post(rater, `/players/${sid.id}/rate`, fullRating({ [S]: 'D2:H' }))).status, 302);
 
   // New season copying the roster, made current
   const create = await h.post(admin, '/admin/seasons', { name: 'Next Season', copy_from: String(s1.id), ratings_open: 'on', make_current: 'on' }, '/admin/seasons');
@@ -245,7 +251,7 @@ test('seasons: re-rate each season, closed seasons, roster copy and history', as
 
   // The rater (whose session still points at season 1) switches to season 2 and can rate again
   await h.post(rater, '/season', { season_id: String(s2.id), return_to: '/players' });
-  const rerate = await h.post(rater, `/players/${sid.id}/rate`, fullRating({ season_id: String(s2.id), score_1: 'D1/C2:H', score_2: 'D1/C2:H', score_3: 'D1/C2:H', score_4: 'D1/C2:H', score_5: 'D1/C2:H', score_6: 'D1/C2:H'}));
+  const rerate = await h.post(rater, `/players/${sid.id}/rate`, fullRating({ season_id: String(s2.id), [S]: 'D1/C2:H' }));
   assert.strictEqual(rerate.status, 302);
   // …but only once per season
   const dup = await h.post(rater, `/players/${sid.id}/rate`, fullRating({ season_id: String(s2.id) }));
@@ -403,7 +409,7 @@ test('viewer role: request, approve, browse everything, but never rate or modify
   assert.doesNotMatch(team.text, /\/rate"/, 'no Rate buttons');
   const playerPage = await viewer.get(`/players/${vic.id}`);
   assert.match(playerPage.text, /Submitted ratings/);
-  assert.match(playerPage.text, /6\.80/, 'sees the average');
+  assert.match(playerPage.text, /7\.00/, 'sees the average');
   assert.doesNotMatch(playerPage.text, /Rate this player|Edit player|Edit rating/);
   assert.match((await viewer.get('/players?q=vic')).text, /Viewable, Vic/);
   assert.strictEqual((await viewer.get(`/reports/teams?team=${owls.id}`)).status, 200);
@@ -466,8 +472,8 @@ test('paper forms: admin prints a multi-player sheet and enters it; paper raters
   assert.strictEqual(enterPage.status, 200);
   assert.match(enterPage.text, /New paper rater/);
   const row = (i, o = {}) => {
-    const out = { [`r${i}_s1`]: '8', [`r${i}_s2`]: '7', [`r${i}_s3`]: '6', [`r${i}_s4`]: '5', [`r${i}_s5`]: '7', [`r${i}_s6`]: '6', [`r${i}_notes`]: 'Solid' };
-    for (const [k, v] of Object.entries(o)) out[`r${i}_${k}`] = v;
+    const out = { [`r${i}_s${OVERALL}`]: '7', [`r${i}_notes`]: 'Solid' };
+    for (const [k, v] of Object.entries(o)) out[k === 's' ? `r${i}_s${OVERALL}` : `r${i}_${k}`] = v;
     return out;
   };
   const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(32)]);
@@ -479,11 +485,11 @@ test('paper forms: admin prints a multi-player sheet and enters it; paper raters
   };
 
   // Errors: no rater, a partial row, and a number that isn't on the scale; nothing is saved
-  const bad = await send(admin, { _csrf: h.csrfFrom(enterPage.text), rater_id: 'new', new_rater_name: '', ...row(0, { s3: '' }), ...row(1, { s2: '2.5' }) });
+  const bad = await send(admin, { _csrf: h.csrfFrom(enterPage.text), rater_id: 'new', new_rater_name: '', ...row(0, { s: '' }), ...row(1, { s: '2.5' }) });
   assert.strictEqual(bad.status, 422);
   assert.match(bad.text, /Enter the new paper rater&#39;s name/);
-  assert.match(bad.text, /Row 1 \(Pat Paperson\): .*Puck Skills|Row 1 \(Pat Paperson\)/);
-  assert.match(bad.text, /Row 2 \(Quinn Quill\): Puck Skills: .*2\.5.* isn&#39;t a scale value/);
+  assert.match(bad.text, /Row 1 \(Pat Paperson\): Overall rating: choose a level/);
+  assert.match(bad.text, /Row 2 \(Quinn Quill\): Overall rating: .*2\.5.* isn&#39;t a scale value/);
   assert.strictEqual((await h.db.one('SELECT count(*)::int AS n FROM paper_submissions')).n, 0);
 
   // Missing CSRF on the multipart form is rejected
@@ -497,7 +503,7 @@ test('paper forms: admin prints a multi-player sheet and enters it; paper raters
   // Good entry for a new paper rater: rows 1, 2 and a write-in (row 4); row 3 left blank
   const ok = await send(admin, {
     _csrf: h.csrfFrom(enterPage.text), rater_id: 'new', new_rater_name: 'Paula Pen', new_rater_email: 'paula@test.com',
-    ...row(0), ...row(1, { notes: 'Fades late' }), ...row(3, { player: String(ids.Subber), s1: '1.5' }),
+    ...row(0), ...row(1, { notes: 'Fades late' }), ...row(3, { player: String(ids.Subber), s: '1.5' }),
   }, { buf: png, name: 'sheet.png', type: 'image/png' });
   assert.strictEqual(ok.status, 302, ok.text);
   const paula = await h.db.one(`SELECT * FROM users WHERE email = 'paula@test.com'`);
@@ -507,7 +513,7 @@ test('paper forms: admin prints a multi-player sheet and enters it; paper raters
   assert.ok(saved.every((r) => r.source === 'paper'));
   const quill = saved.find((r) => r.player_id === ids.Quill);
   assert.deepStrictEqual([quill.evidence, quill.final_level], ['Fades late', null]);
-  const subGrade = await h.db.one('SELECT grade, score FROM rating_scores WHERE rating_id = $1 AND category_id = 1', [saved.find((r) => r.player_id === ids.Subber).id]);
+  const subGrade = await h.db.one('SELECT grade, score FROM rating_scores WHERE rating_id = $1 AND category_id = $2', [saved.find((r) => r.player_id === ids.Subber).id, OVERALL]);
   assert.deepStrictEqual([subGrade.grade, Number(subGrade.score)], ['D3:M', 1.5]);
   const sub = await h.db.one('SELECT * FROM paper_submissions WHERE rater_id = $1', [paula.id]);
   assert.strictEqual(sub.scan_type, 'image/png');
@@ -565,15 +571,19 @@ test('admins change or disqualify ratings only with a reason; disqualified ratin
 
   const form = await rater.get(`/players/${dee.id}/rate`);
   assert.match(form.text, /<strong>Ratings should reflect where you think the player is in relation to the league/);
+  // One combined rating: a single level scale, no Skating / Puck Skills / … sections
+  assert.strictEqual((form.text.match(/class="grade-scale"/g) || []).length, 1);
+  assert.match(form.text, /Overall rating/);
+  assert.doesNotMatch(form.text, /category-title">[^<]*(Skating|Puck Skills|Shooting)/);
   await h.post(rater, `/players/${dee.id}/rate`, fullRating());
   const rating = await h.db.one('SELECT id FROM ratings WHERE player_id = $1', [dee.id]);
 
   // Changing a rating needs a reason
   const editUrl = `/admin/ratings/${rating.id}`;
-  const noReason = await h.post(admin, editUrl, fullRating({ score_1: 'A' }), `${editUrl}/edit`);
+  const noReason = await h.post(admin, editUrl, fullRating({ [S]: 'A' }), `${editUrl}/edit`);
   assert.strictEqual(noReason.status, 422);
   assert.match(noReason.text, /Enter a reason for changing this rating/);
-  assert.strictEqual((await h.db.one('SELECT grade FROM rating_scores WHERE rating_id = $1 AND category_id = 1', [rating.id])).grade, 'D1/C2:H');
+  assert.strictEqual((await h.db.one('SELECT grade FROM rating_scores WHERE rating_id = $1 AND category_id = $2', [rating.id, OVERALL])).grade, 'D1/C2:M');
 
   // Raters can't disqualify
   assert.strictEqual((await h.post(rater, `${editUrl}/disqualify`, { reason: 'x' })).status, 403);
@@ -602,7 +612,7 @@ test('admins change or disqualify ratings only with a reason; disqualified ratin
   assert.ok((await h.db.one('SELECT disqualified_at FROM ratings WHERE id = $1', [rating.id])).disqualified_at);
   await h.post(admin, `${editUrl}/reinstate`, { reason: 'Talked to the rater; it was a mix-up' }, `/players/${dee.id}`);
   assert.strictEqual((await h.db.one('SELECT disqualified_at FROM ratings WHERE id = $1', [rating.id])).disqualified_at, null);
-  assert.match((await admin.get(`/players/${dee.id}`)).text, /6\.80/);
+  assert.match((await admin.get(`/players/${dee.id}`)).text, /7\.00/);
 
   const actions = (await h.db.many(`SELECT action, details->>'reason' AS reason FROM audit_log WHERE entity = 'rating' AND entity_id = $1 AND action <> 'rating_created' ORDER BY id`, [rating.id]));
   assert.deepStrictEqual(actions.map((a) => [a.action, a.reason]), [

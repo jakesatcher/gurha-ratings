@@ -26,18 +26,7 @@ People choose **Rater** or **Viewer** when they request access. The admin alert 
 - Request access. An admin must approve the request before the rater can sign in.
 - Two-step verification at every sign-in: an **authenticator app** (TOTP) or **email codes**.
 - Search players by name, team, division or jersey #. Filter by team, position, "not rated by me" or "needs 3rd review".
-- Rate a player on the six weighted categories, each by level plus Low / Mid / High (see *How scores are calculated*):
-
-  | Category | Weight |
-  |---|---|
-  | Skating | 25% |
-  | Puck Skills | 20% |
-  | Passing & Receiving | 15% |
-  | Shooting | 10% |
-  | Hockey IQ / Awareness | 20% |
-  | Game Execution | 10% |
-
-  The form ends with one optional **Comments** box. The overall score and level update live as you score.
+- Rate a player with **one overall rating**: pick the level they show (Beginner, D3, D2, D1/C2, C1/B2, B1/A2, A), then Low / Medium / High within it, plus an optional **Comments** box. (Skating, puck skills, passing, shooting, hockey sense and game execution are listed as things to consider, not rated separately.) The points and level update live as you choose.
 - **One rating per player per rater, per season.** This is enforced in the database. Submitting again in the same season shows:
   > You already rated this player. If you feel this is an error, or would like to change your rating, please contact an Admin
 - View submitted ratings and averages. Other raters show as "Rater 1", "Rater 2" by default.
@@ -54,7 +43,7 @@ People choose **Rater** or **Viewer** when they request access. The admin alert 
 
 ## How scores are calculated
 
-Raters rate each category by level, then **Low / Mid / High** within it. Each choice is worth fixed points:
+Raters give each player one overall rating: a level, then **Low / Medium / High** within it. Each choice is worth fixed points:
 
 | Level | Low | Mid | High |
 |---|---|---|---|
@@ -66,13 +55,15 @@ Raters rate each category by level, then **Low / Mid / High** within it. Each ch
 | B1/A2 | 12 | 13 | 14 |
 | A | 15 | | |
 
-- **Rating overall** = Σ(points × weight) ÷ Σ(weights), 0–15. With the default weights: `(Skating × .25) + (Puck × .20) + (Passing × .15) + (Shooting × .10) + (IQ × .20) + (Execution × .10)`.
-- **Calculated level**: round the overall to the nearest whole point using standard rounding (.5 and up rounds up, so 2.4 → 2 = D3 and 2.5 → 3 = D2), then take the level that point value belongs to (0 BEG, 1–2 D3, 3–5 D2, 6–8 D1/C2, 9–11 C1/B2, 12–14 B1/A2, 15 A). Displayed scores are rounded to 2 decimals the same way.
-- **Player final rating** (per season) = the average of all raters' overall scores that season. The player's level comes from that average, unless an admin set an override for that season.
+- **Rating** = the points for the chosen level and step (0–15).
+- **Calculated level**: round the average to the nearest whole point using standard rounding (.5 and up rounds up, so 2.4 → 2 = D3 and 2.5 → 3 = D2), then take the level that point value belongs to (0 BEG, 1–2 D3, 3–5 D2, 6–8 D1/C2, 9–11 C1/B2, 12–14 B1/A2, 15 A). Displayed scores are rounded to 2 decimals the same way.
+- **Player final rating** (per season) = the average of all raters' points that season. The player's level comes from that average, unless an admin set an override for that season.
 - **3rd review flag**: raters' calculated levels for the player differ by ≥ 2 levels.
 - Ratings made on the old 0–11 scale are still shown (tagged "old 0–11 scale") but don't count toward any average. An admin can edit one to re-score it on the new scale, or delete it so the rater can rate again.
 
 The form has one optional **Comments** box. Admins can still set a final level override per season.
+
+Ratings made while there were six separate categories were carried over: each one's weighted overall became its single rating, so averages didn't change. Their category scores still show on the player page for reference. The old categories are kept (inactive), and the Categories admin page is no longer in the menu.
 
 ## Deploying on Railway
 

@@ -157,7 +157,12 @@ async function loadRatings({ playerIds, ratingId, seasonId } = {}) {
     params
   );
   if (!ratings.length) return { ratings, categories };
-  const scoreRows = await db.many('SELECT * FROM rating_scores WHERE rating_id = ANY($1::int[])', [ratings.map((r) => r.id)]);
+  const scoreRows = await db.many(
+    `SELECT rs.*, c.name AS category_name, c.weight AS category_weight, c.active AS category_active, c.sort_order
+       FROM rating_scores rs JOIN categories c ON c.id = rs.category_id
+      WHERE rs.rating_id = ANY($1::int[]) ORDER BY c.sort_order, c.id`,
+    [ratings.map((r) => r.id)]
+  );
   const byRating = new Map();
   for (const s of scoreRows) {
     s.score = s.score === null ? null : Number(s.score); // numeric comes back as a string
@@ -171,7 +176,10 @@ async function loadRatings({ playerIds, ratingId, seasonId } = {}) {
     // Ratings from the old 0–11 scale are shown for reference but kept out of every average.
     r.legacy = r.scale === 1;
     r.disqualified = Boolean(r.disqualified_at);
-    r.overall = weightedOverall(r.scores, categories);
+    // Old 0–11 ratings were scored on categories that are now inactive; use their own categories for them.
+    r.overall = r.legacy
+      ? weightedOverall(r.scores, r.scores.map((s) => ({ id: s.category_id, weight: s.category_weight })))
+      : weightedOverall(r.scores, categories);
     r.calculated_level = r.legacy ? null : levelForScore(r.overall);
     // Older ratings may carry a rater-recommended level; current ratings are judged by their scores.
     r.effective_level = r.legacy ? r.final_level : r.calculated_level;

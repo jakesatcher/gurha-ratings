@@ -52,7 +52,7 @@
   <% if (!summary.count) { %>
     <p class="muted">No ratings submitted yet.</p>
   <% } else { %>
-    <div class="bars">
+    <% if (categories.length > 1) { %><div class="bars">
       <% categories.forEach(function (c) { const v = summary.categoryAverages[c.id]; %>
         <div class="bar-row">
           <div class="bar-label"><%= c.name %> <span class="muted small"><%= Number(c.weight) %>%</span></div>
@@ -61,8 +61,9 @@
         </div>
       <% }) %>
     </div>
+    <% } %>
     <dl class="dl dl-inline">
-      <dt>Weighted overall</dt><dd><strong><%= fmt(summary.avgOverall) %></strong> / <%= levels.MAX_POINTS %> → <%- include('../partials/level', { level: summary.calculatedLevel }) %></dd>
+      <dt><%= categories.length > 1 ? 'Weighted overall' : 'Average rating' %></dt><dd><strong><%= fmt(summary.avgOverall) %></strong> / <%= levels.MAX_POINTS %> → <%- include('../partials/level', { level: summary.calculatedLevel }) %></dd>
       <% if (summary.overridden) { %>
         <dt>Admin final level</dt><dd><%- include('../partials/level', { level: player.level_override }) %> <span class="muted small"><%= player.level_override_note || '' %></span></dd>
       <% } %>
@@ -131,22 +132,25 @@
       <% if (r.disqualified) { %>
         <div class="alert alert-warn">Disqualified<%= isAdmin && r.disqualified_by_name ? ` by ${r.disqualified_by_name}` : '' %> on <%= fmtDate(r.disqualified_at) %>. Not counted toward averages.<% if (isAdmin) { %><br><strong>Reason:</strong> <%= r.disqualified_reason %><% } %></div>
       <% } %>
+      <% const oldScores = r.scores.filter(x => !x.category_active); const main = r.scores.find(x => x.category_active); %>
+      <% if (oldScores.length) { const catNotes = oldScores.some(x => x.comment); %>
       <table class="table compact">
-        <% const catNotes = r.scores.some(x => x.comment); %>
-        <thead><tr><th>Category</th><th>Rating</th><th class="num">Points</th><% if (catNotes) { %><th>Comments</th><% } %></tr></thead>
+        <caption class="small muted"><%= r.legacy ? 'Scores on the old 0–11 scale' : 'Category scores from before ratings were combined' %></caption>
+        <thead><tr><th>Category</th><% if (!r.legacy) { %><th>Rating</th><% } %><th class="num">Points</th><% if (catNotes) { %><th>Comments</th><% } %></tr></thead>
         <tbody>
-          <% categories.forEach(function (c) { const s = r.scoreMap[c.id]; %>
-            <tr><td><%= c.name %></td>
-              <td class="grade-tag"><% if (s && s.gradeInfo) { %><%- include('../partials/level', { level: s.gradeInfo.level }) %> <%= s.gradeInfo.step ? levels.STEP_NAMES[s.gradeInfo.step] : '' %><% } else { %>—<% } %></td>
-              <td class="num"><%= s ? fmt(s.score, 1) : '—' %></td><% if (catNotes) { %><td><%= s && s.comment ? s.comment : '' %></td><% } %></tr>
+          <% oldScores.forEach(function (s) { %>
+            <tr><td><%= s.category_name %></td>
+              <% if (!r.legacy) { %><td class="grade-tag"><% if (s.gradeInfo) { %><%- include('../partials/level', { level: s.gradeInfo.level }) %> <%= s.gradeInfo.step ? levels.STEP_NAMES[s.gradeInfo.step] : '' %><% } else { %>—<% } %></td><% } %>
+              <td class="num"><%= fmt(s.score, r.legacy ? 0 : 1) %></td><% if (catNotes) { %><td><%= s.comment || '' %></td><% } %></tr>
           <% }) %>
         </tbody>
       </table>
+      <% } %>
       <dl class="dl">
         <% if (r.legacy) { %>
           <dt>Old 0–11 overall</dt><dd><%= fmt(r.overall) %> <span class="muted small">(not counted)</span></dd>
         <% } else { %>
-          <dt>Calculated</dt><dd><%= fmt(r.overall) %> / <%= levels.MAX_POINTS %> → <%- include('../partials/level', { level: r.calculated_level }) %></dd>
+          <dt>Rating</dt><dd class="grade-tag"><% if (main && main.gradeInfo) { %><%- include('../partials/level', { level: main.gradeInfo.level }) %> <%= main.gradeInfo.step ? levels.STEP_NAMES[main.gradeInfo.step] : '' %> · <% } %><%= fmt(r.overall) %> / <%= levels.MAX_POINTS %> points<% if (!main || !main.gradeInfo) { %> → <%- include('../partials/level', { level: r.calculated_level }) %><% } %></dd>
         <% } %>
         <% if (r.legacy && r.final_level) { %><dt>Rater's level</dt><dd><%- include('../partials/level', { level: r.final_level }) %></dd><% } %>
         <% if (r.evidence) { %><dt>Comments</dt><dd class="pre"><%= r.evidence %></dd><% } %>

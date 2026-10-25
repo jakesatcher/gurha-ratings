@@ -29,7 +29,7 @@
       <li>Complete your evaluation independently before discussing the player with other raters.</li>
     </ul>
     <p><strong>The key question:</strong> What level does this player consistently demonstrate during actual game play?</p>
-    <p>For each category pick the level the player shows, then <strong>Low</strong>, <strong>Medium</strong> or <strong>High</strong> within it. Beginner and A are a single choice.</p>
+    <p>Pick the level the player shows overall, considering skating, puck skills, passing, shooting, hockey sense and game execution together, then <strong>Low</strong>, <strong>Medium</strong> or <strong>High</strong> within it. Beginner and A are a single choice.</p>
   </details>
 </section>
 
@@ -41,17 +41,19 @@
   <input type="hidden" name="_csrf" value="<%= csrfToken %>">
   <% if (!isEdit) { %><input type="hidden" name="season_id" value="<%= season.id %>"><% } %>
   <% if (isEdit && rating.legacy) { %>
-    <div class="alert alert-info">This rating was made on the old 0–11 scale (old scores: <%= categories.map(c => `${c.name} ${rating.scoreMap[c.id] ? rating.scoreMap[c.id].score : '—'}`).join(', ') %>). Saving re-scores it on the new scale so it counts toward averages again.</div>
+    <div class="alert alert-info">This rating was made on the old 0–11 scale (old scores: <%= rating.scores.map(s => `${s.category_name} ${fmt(s.score, 0)}`).join(', ') %>). Saving re-rates it on the current scale so it counts toward averages again.</div>
+  <% } else if (isEdit && rating.scores.some(s => s.category_active && !s.grade)) { %>
+    <div class="alert alert-info">This rating was made with separate categories and carried over as <strong><%= fmt(rating.overall) %></strong> points. Pick a level and Low / Medium / High to replace it.</div>
   <% } %>
 
   <% categories.forEach(function (c, idx) { const cur = String(val(`score_${c.id}`)); %>
   <fieldset class="card category" id="cat-<%= c.id %>">
-    <legend class="category-title"><span class="cat-num"><%= idx + 1 %></span> <%= c.name %> <span class="weight"><%= Number(c.weight) %>%</span></legend>
+    <legend class="category-title"><% if (categories.length > 1) { %><span class="cat-num"><%= idx + 1 %></span> <% } %><%= c.name %><% if (categories.length > 1) { %> <span class="weight"><%= Number(c.weight) %>%</span><% } %></legend>
     <% if (c.note) { %><p class="cat-note"><%= c.note %></p><% } %>
     <% if (c.key_question) { %><p class="key-question"><strong>Key question:</strong> <%= c.key_question %></p><% } %>
     <% if (c.considerations.length || c.guide.length) { %>
     <details class="cat-guide">
-      <summary>What to consider &amp; rating guide</summary>
+      <summary>What to consider</summary>
       <% if (c.considerations.length) { %>
         <ul class="considerations"><% c.considerations.forEach(function (x) { %><li><%= x %></li><% }) %></ul>
       <% } %>
@@ -81,8 +83,8 @@
 
   <section class="card">
     <h2>Overall score</h2>
-    <p class="calc">Calculated overall: <strong id="calc-score">—</strong> / <%= levels.MAX_POINTS %> → <span id="calc-level" class="level level-none">—</span></p>
-    <p class="small muted">Overall = <%= categories.map(c => `${c.name} × ${(Number(c.weight) / 100).toFixed(2)}`).join(' + ') %>, using the points for each choice (Beginner 0 up to A 15).</p>
+    <p class="calc">Points: <strong id="calc-score">—</strong> / <%= levels.MAX_POINTS %> → <span id="calc-level" class="level level-none">—</span></p>
+    <% if (categories.length > 1) { %><p class="small muted">Overall = <%= categories.map(c => `${c.name} × ${(Number(c.weight) / 100).toFixed(2)}`).join(' + ') %>, using the points for each choice (Beginner 0 up to A 15).</p><% } %>
   </section>
 
   <section class="card">

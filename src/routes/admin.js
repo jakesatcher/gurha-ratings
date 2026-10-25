@@ -711,7 +711,7 @@ router.get('/export.csv', async (req, res) => {
   const categories = await R.getCategories();
   const summaries = await R.summariesForPlayers(players, req.season.id);
   const header = ['season', 'player_id', 'first_name', 'last_name', 'jersey_number', 'team', 'division', 'all_teams', 'position', 'active', 'ratings_count',
-    ...categories.map((c) => `avg_${c.key}`), 'avg_overall', 'calculated_level', 'level_override', 'final_level', 'needs_third_review'];
+    ...(categories.length > 1 ? categories.map((c) => `avg_${c.key}`) : []), 'avg_overall', 'calculated_level', 'level_override', 'final_level', 'needs_third_review'];
   const lines = [header.join(',')];
   for (const p of players) {
     const s = summaries.get(p.id);
@@ -719,7 +719,7 @@ router.get('/export.csv', async (req, res) => {
       req.season.name, p.id, p.first_name, p.last_name, p.jersey_number, p.team, p.division,
       p.memberships.map((m) => `${m.team || 'No team'}${m.jersey_number ? ` #${m.jersey_number}` : ''}${m.is_sub ? ' (sub)' : ''}`).join('; '),
       p.position, p.active, s.count,
-      ...categories.map((c) => s.categoryAverages[c.id]), s.avgOverall, s.calculatedLevel, p.level_override, s.level,
+      ...(categories.length > 1 ? categories.map((c) => s.categoryAverages[c.id]) : []), s.avgOverall, s.calculatedLevel, p.level_override, s.level,
       s.needsReview,
     ].map(csvCell).join(','));
   }
