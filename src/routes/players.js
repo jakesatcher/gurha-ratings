@@ -9,6 +9,7 @@ const R = require('../lib/ratings');
 const roster = require('../lib/roster');
 const { levelForScore } = require('../lib/levels');
 const TS = require('../lib/teamscore');
+const { toCsv } = require('../lib/csv');
 
 const router = express.Router();
 
@@ -296,6 +297,75 @@ router.get('/reports/leagues/:key', requireAuth, async (req, res) => {
   const allowances = await TS.leagueAllowances(req.season.id);
   league.allowance = allowances.has(TS.capKey(league.division)) ? allowances.get(TS.capKey(league.division)) : null;
   res.render('players/report-league', { title: `${league.name} teams`, league, multiplier: TS.CAP_MULTIPLIER });
+});
+
+// ---------- Export: League, Team, Player, Number, Rating (CSV or printable page) ----------
+
+const jerseySort = (j) => {
+  const n = parseInt(String(j || '').replace(/\D/g, ''), 10);
+  return Number.isNaN(n) ? Infinity : n;
+};
+
+// One row per team spot, ordered league → team → jersey → name. Scope with ?league=<key> or ?team=<id>.
+async function exportRows(req) {
+  const data = await browseData(req.season, req.user.id);
+  const teamId = Number(req.query.team) || null;
+  const leagueParam = req.query.league ? String(req.query.league) : null;
+  const rows = [];
+  for (const l of data.leagues) {
+    if (leagueParam && l.key !== leagueKey(leagueParam === NO_LEAGUE ? null : leagueParam)) continue;
+    for (const t of [...l.teams].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))) {
+      if (teamId && t.id !== teamId) continue;
+      const spots = t.members.map((p) => {
+        const regular = p.memberships.find((m) => m.team_id === t.id && !m.is_sub);
+        const spot = regular || p.memberships.find((m) => m.team_id === t.id);
+        return { p, jersey: spot.jersey_number, sub: !regular };
+      });
+      spots.sort((a, b) => a.sub - b.sub || jerseySort(a.jersey) - jerseySort(b.jersey) || a.p.last_name.localeCompare(b.p.last_name));
+      for (const { p, jersey, sub } of spots) {
+        const s = data.summaries.get(p.id);
+        rows.push({
+          league: l.division || 'No league',
+          team: t.name,
+          player: `${p.last_name}, ${p.first_name}${sub ? ' (Sub)' : ''}`,
+          number: jersey || '',
+          rating: s.avgOverall,
+          level: s.level,
+          overridden: s.overridden,
+          playerId: p.id,
+        });
+      }
+    }
+  }
+  if (!teamId && !leagueParam) {
+    for (const p of data.unassigned) {
+      const s = data.summaries.get(p.id);
+      rows.push({ league: '', team: 'No team', player: `${p.last_name}, ${p.first_name}`, number: '', rating: s.avgOverall, level: s.level, overridden: s.overridden, playerId: p.id });
+    }
+  }
+  const scope = teamId ? (rows[0] ? rows[0].team : 'Team') : leagueParam ? (leagueParam === NO_LEAGUE ? 'No league' : leagueParam) : 'All leagues';
+  return { rows, scope };
+}
+
+router.get('/reports/export.csv', requireAuth, async (req, res) => {
+  if (!req.season) return noSeason(req, res);
+  const { rows, scope } = await exportRows(req);
+  const fmt2 = (n) => (n === null || n === undefined ? '' : Number(n).toFixed(2));
+  const csv = toCsv([
+    ['League', 'Team', 'Player', 'Number', 'Rating', 'Level'],
+    ...rows.map((r) => [r.league, r.team, r.player, r.number, fmt2(r.rating), r.level ? `${r.level}${r.overridden ? ' *' : ''}` : '']),
+  ]);
+  const name = `gurha-${req.season.name}-${scope}`.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  res.set('Content-Type', 'text/csv; charset=utf-8');
+  res.set('Content-Disposition', `attachment; filename="${name}.csv"`);
+  res.send(csv);
+});
+
+router.get('/reports/export', requireAuth, async (req, res) => {
+  if (!req.season) return noSeason(req, res);
+  const { rows, scope } = await exportRows(req);
+  const query = new URLSearchParams(Object.entries({ league: req.query.league || '', team: req.query.team || '' }).filter(([, v]) => v)).toString();
+  res.render('players/export', { title: `Ratings export – ${scope}`, rows, scope, csvHref: `/reports/export.csv${query ? `?${query}` : ''}` });
 });
 
 module.exports = router;

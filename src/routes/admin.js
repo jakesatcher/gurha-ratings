@@ -724,13 +724,7 @@ router.post('/categories/:id', async (req, res) => {
 
 // ---------- Export ----------
 
-function csvCell(v) {
-  if (v === null || v === undefined) return '';
-  const s = String(v);
-  // Neutralise spreadsheet formula injection.
-  const safe = /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;
-  return /[",\n\r]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
-}
+const { csvCell } = require('../lib/csv');
 
 router.get('/export.csv', async (req, res) => {
   if (!needSeason(req, res)) return;

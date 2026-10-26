@@ -647,3 +647,12 @@ h2 { text-transform: uppercase; font-weight: 600; }
 .report-score { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem 1rem; margin-top: .75rem; }
 .score-key .team-score { font-size: .8rem; }
 @media print { .team-score { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+.export-table tr.team-start td { border-top: 2px solid var(--text, #0f172a); }
+.export-table tr.team-start:first-child td { border-top: 0; }
+.export-table td:nth-child(1), .export-table td:nth-child(2) { font-weight: 700; }
+@media print {
+  .export-sheet { box-shadow: none; border: 0; padding: 0; }
+  .export-table { font-size: 10.5pt; }
+  .export-table tr { break-inside: avoid; }
+  .export-table thead { display: table-header-group; }
+}

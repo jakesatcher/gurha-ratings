@@ -4,6 +4,7 @@
   <h1><%= team.name %> summary</h1>
   <div class="actions">
     <a class="btn btn-small" href="/teams/<%= team.id %>">Players</a>
+    <a class="btn btn-small" href="/reports/export.csv?team=<%= team.id %>">Export CSV</a>
     <button class="btn btn-small" type="button" data-print>Print</button>
   </div>
 </div>

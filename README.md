@@ -30,6 +30,7 @@ People choose **Rater** or **Viewer** when they request access. The admin alert 
 - **One rating per player per rater, per season.** This is enforced in the database. Submitting again in the same season shows:
   > You already rated this player. If you feel this is an error, or would like to change your rating, please contact an Admin
 - View submitted ratings and averages. Other raters show as "Rater 1", "Rater 2" by default.
+- **Export** (Teams tab: *Export all*, *Export league*, or *Export CSV* on a team summary): League, Team, Player, Number, Rating (average points) and Level, one row per team spot, ordered league → team → jersey. **Download CSV** opens in Excel/Sheets; the export page itself prints as a clean table grouped by team.
 - **Teams tab**: pick a league, then a team, to see its printable *Team Player Rating & Division Summary*. Each team has a **Score**: the sum of its regular players' final ratings (subs don't count; unrated players count 0). Admins set each league's **allowance per team** for the season on the league page; the **cap** teams are measured against is the allowance × 1.36 (≈ 15 ÷ 11, converting the old 0–11 points to the 0–15 scale), e.g. allowance 40 → cap 54.40. The Score is **green** at or under the cap, **yellow** up to 5 over, **orange** over 5 and up to 10 over, and **red** more than 10 over; with no allowance set it's grey. The multiplier is `CAP_MULTIPLIER` in `src/lib/teamscore.js`.
 
 **Admins**

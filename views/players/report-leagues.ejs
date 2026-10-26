@@ -4,6 +4,10 @@
     <h1>Teams</h1>
     <p class="muted page-sub"><%= season.name %> · choose a league</p>
   </div>
+  <div class="actions">
+    <a class="btn btn-small" href="/reports/export">Export all</a>
+    <a class="btn btn-small" href="/reports/export.csv">CSV</a>
+  </div>
 </div>
 
 <% if (!leagues.length) { %>

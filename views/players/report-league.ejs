@@ -5,6 +5,10 @@
     <h1><%= league.name %></h1>
     <p class="muted page-sub"><%= season.name %> · <%= league.teams.length %> teams · <%= league.cap !== null ? `cap ${fmt(league.cap)} points per team (allowance ${fmt(league.allowance)} × ${multiplier})` : 'no points limit set' %></p>
   </div>
+  <div class="actions">
+    <a class="btn btn-small" href="/reports/export?league=<%= league.key %>">Export league</a>
+    <a class="btn btn-small" href="/reports/export.csv?league=<%= league.key %>">CSV</a>
+  </div>
 </div>
 
 <% if (currentUser.role === 'admin') { %>

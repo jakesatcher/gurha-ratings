@@ -1,0 +1,37 @@
+<%- include('../partials/head') %>
+<div class="page-head no-print">
+  <div>
+    <h1>Ratings export</h1>
+    <p class="muted page-sub"><%= season.name %> · <%= scope %> · <%= rows.length %> players</p>
+  </div>
+  <div class="actions">
+    <a class="btn btn-primary" href="<%= csvHref %>">Download CSV</a>
+    <button class="btn" type="button" data-print>Print</button>
+  </div>
+</div>
+
+<section class="card report export-sheet">
+  <div class="report-head">
+    <h2>GURHA Recreational Hockey</h2>
+    <p class="report-sub">Player ratings · <%= season.name %> · <%= scope %> · <%= fmtDate(new Date()) %></p>
+  </div>
+  <% if (!rows.length) { %><p class="muted">No players to export.</p><% } else { %>
+  <table class="table compact export-table">
+    <thead><tr><th>League</th><th>Team</th><th>Player</th><th class="num">Number</th><th class="num">Rating</th><th>Level</th></tr></thead>
+    <tbody>
+      <% let prevTeam = null; rows.forEach(function (r) { const newTeam = `${r.league}|${r.team}` !== prevTeam; prevTeam = `${r.league}|${r.team}`; %>
+        <tr class="<%= newTeam ? 'team-start' : '' %>">
+          <td><%= newTeam ? r.league : '' %></td>
+          <td><%= newTeam ? r.team : '' %></td>
+          <td><%= r.player %></td>
+          <td class="num"><%= r.number %></td>
+          <td class="num"><%= r.rating === null ? '—' : fmt(r.rating) %></td>
+          <td><%= r.level ? r.level + (r.overridden ? ' *' : '') : '—' %></td>
+        </tr>
+      <% }) %>
+    </tbody>
+  </table>
+  <p class="small muted">Rating is the average of all raters' points (0–<%= levels.MAX_POINTS %>). * Level set by an admin. — not rated yet.</p>
+  <% } %>
+</section>
+<%- include('../partials/foot') %>

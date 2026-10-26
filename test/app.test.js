@@ -698,3 +698,36 @@ test('Teams tab: league → team summary with a Score coloured against the leagu
   assert.strictEqual((await h.post(rater, '/admin/league-caps', { division: 'Cap League', max_points: '99' })).status, 403);
   assert.doesNotMatch((await rater.get('/reports/leagues/Cap%20League')).text, /Allowed points per team<\/strong>/);
 });
+
+test('export: League, Team, Player, Number, Rating as CSV and a printable page', async () => {
+  await h.createUser({ email: 'exp-admin@test.com', name: 'Exp Admin', role: 'admin' });
+  const admin = await h.login(app, 'exp-admin@test.com');
+  await h.post(admin, '/admin/players', { first_name: 'Zed', last_name: 'Zulu', team: 'Exporters', division: 'Exp League', jersey_number: '10' }, '/admin/players/new');
+  await h.post(admin, '/admin/players', { first_name: 'Amy', last_name: 'Alpha', team: 'Exporters', division: 'Exp League', jersey_number: '2' }, '/admin/players/new');
+  await h.post(admin, '/admin/players', { first_name: 'Bad', last_name: '=cmd', team: 'Exporters', division: 'Exp League', jersey_number: '30' }, '/admin/players/new');
+  const amy = await h.db.one(`SELECT id FROM players WHERE last_name = 'Alpha'`);
+  await h.post(admin, `/players/${amy.id}/rate`, fullRating({ [S]: 'C1/B2:H' }));
+
+  const csv = await admin.get('/reports/export.csv?league=Exp%20League');
+  assert.strictEqual(csv.status, 200);
+  assert.match(csv.headers['content-type'], /text\/csv/);
+  assert.match(csv.headers['content-disposition'], /attachment; filename="gurha-.*exp-league\.csv"/);
+  const lines = csv.text.replace(/^﻿/, '').trim().split('\r\n');
+  assert.deepStrictEqual(lines, [
+    'League,Team,Player,Number,Rating,Level',
+    'Exp League,Exporters,"Alpha, Amy",2,11.00,C1/B2',
+    'Exp League,Exporters,"Zulu, Zed",10,,',
+    "Exp League,Exporters,\"'=cmd, Bad\",30,,", // formula-looking text is neutralised
+  ]);
+
+  const team = await h.db.one(`SELECT id FROM teams WHERE name = 'Exporters'`);
+  const one = await admin.get(`/reports/export.csv?team=${team.id}`);
+  assert.strictEqual(one.text.trim().split('\r\n').length, 4);
+  assert.match((await admin.get('/reports/export.csv')).text, /Exp League,Exporters,"Alpha, Amy"/);
+
+  const page = await admin.get('/reports/export?league=Exp%20League');
+  assert.match(page.text, /Download CSV/);
+  assert.match(page.text, /href="\/reports\/export\.csv\?league=Exp\+League"/);
+  assert.match(page.text, /Alpha, Amy[\s\S]*Zulu, Zed/);
+  assert.match((await admin.get('/reports/teams')).text, /href="\/reports\/export"/);
+});
