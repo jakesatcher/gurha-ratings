@@ -1,17 +1,13 @@
 <%- include('../partials/head') %>
+<p class="crumbs no-print"><a href="/reports/teams">Teams</a> › <a href="<%= leagueHref %>"><%= team.division || 'No league' %></a> › <%= team.name %></p>
 <div class="page-head no-print">
-  <h1>Team summary</h1>
-</div>
-<form method="get" action="/reports/teams" class="filters no-print">
-  <div class="filter-row">
-    <select name="team" aria-label="Team" required>
-      <option value="">Choose a team…</option>
-      <% teams.forEach(function (t) { %><option value="<%= t.id %>" <%= team && team.id === t.id ? 'selected' : '' %>><%= t.name %><%= t.division ? ` (${t.division})` : '' %></option><% }) %>
-    </select>
-    <button class="btn" type="submit">Show</button>
-    <% if (team) { %><button class="btn" type="button" data-print>Print</button><% } %>
+  <h1><%= team.name %> summary</h1>
+  <div class="actions">
+    <a class="btn btn-small" href="/teams/<%= team.id %>">Players</a>
+    <button class="btn btn-small" type="button" data-print>Print</button>
   </div>
-</form>
+</div>
+
 
 <% if (team) { %>
 <section class="card report">
@@ -24,6 +20,11 @@
       <dt>Team</dt><dd><%= team.name %></dd>
       <dt>League / Division</dt><dd><%= team.division || '—' %></dd>
     </dl>
+    <div class="report-score">
+      <%- include('../partials/team-score', { s: score, big: true }) %>
+      <span class="small muted"><% if (score.cap === null) { %>No points limit set for this league.<% } else if (score.over > 0) { %><%= fmt(score.over) %> points over the <%= fmt(score.cap) %> allowed.<% } else { %><%= fmt(-score.over) %> points under the <%= fmt(score.cap) %> allowed.<% } %>
+        Sum of <%= score.counted %> regular players' final ratings<%= score.unrated ? ` (${score.unrated} unrated count as 0)` : '' %>; subs aren't counted.</span>
+    </div>
   </div>
   <div class="table-wrap">
   <table class="table">
@@ -42,7 +43,7 @@
     </tbody>
   </table>
   </div>
-  <p class="small muted">* Final level set by an admin. Final rating is the average weighted score across all raters. A player on several teams (e.g. as a sub) has one rating per season, shown on each team.</p>
+  <p class="small muted">* Final level set by an admin. Final rating is the average of all raters' points. Score is the sum of the regular players' final ratings. A player on several teams (e.g. as a sub) has one rating per season, shown on each team.</p>
   <h3>Individual GURHA rating scale</h3>
   <div class="scale">
     <% levels.BANDS.forEach(function (b) { %><div><%- include('../partials/level', { level: b.level }) %> <span class="muted small"><%= Object.entries(b.points).map(([st, pts]) => st ? `${levels.STEP_NAMES[st]} ${pts}` : pts).join(' · ') %></span></div><% }) %>

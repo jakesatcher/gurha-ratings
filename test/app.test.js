@@ -650,3 +650,49 @@ test('migration 011 removes ratings made with separate categories, logging each 
   await h.db.query(sql);
   assert.strictEqual((await h.db.one('SELECT count(*)::int AS n FROM ratings WHERE player_id = $1', [player.id])).n, 1);
 });
+
+test('Teams tab: league → team summary with a Score coloured against the league allowance', async () => {
+  await h.createUser({ email: 'cap-admin@test.com', name: 'Cap Admin', role: 'admin' });
+  const admin = await h.login(app, 'cap-admin@test.com');
+  for (const [first, last, sub] of [['Ann', 'One', false], ['Bob', 'Two', false], ['Cal', 'Three', false]]) {
+    await h.post(admin, '/admin/players', { first_name: first, last_name: last, team: 'Capitals', division: 'Cap League', is_sub: sub ? 'on' : '' }, '/admin/players/new');
+  }
+  const caps = await h.db.one(`SELECT id FROM teams WHERE name = 'Capitals'`);
+  const ids = Object.fromEntries((await h.db.many(`SELECT id, last_name FROM players WHERE last_name IN ('One', 'Two', 'Three')`)).map((p) => [p.last_name, p.id]));
+  // Ann 13 (B1/A2 Medium), Bob 10 (C1/B2 Medium); Cal unrated → Score 23
+  await h.post(admin, `/players/${ids.One}/rate`, fullRating({ [S]: 'B1/A2:M' }));
+  await h.post(admin, `/players/${ids.Two}/rate`, fullRating({ [S]: 'C1/B2:M' }));
+
+  // Teams tab starts with leagues, like the Players tab
+  const leagues = await admin.get('/reports/teams');
+  assert.match(leagues.text, /href="\/reports\/leagues\/Cap%20League"/);
+  assert.match(leagues.text, /No points limit set/);
+  const league = await admin.get('/reports/leagues/Cap%20League');
+  assert.match(league.text, /href="\/reports\/teams\?team=\d+"/);
+  assert.match(league.text, /team-score score-none[\s\S]*?23\.00/);
+
+  const setCap = async (v) => h.post(admin, '/admin/league-caps', { division: 'Cap League', max_points: v }, '/reports/leagues/Cap%20League');
+  const statusAt = async () => /team-score score-(\w+) team-score-big/.exec((await admin.get(`/reports/teams?team=${caps.id}`)).text)[1];
+  await setCap('23');
+  assert.strictEqual(await statusAt(), 'green');
+  await setCap('20');
+  assert.strictEqual(await statusAt(), 'yellow');
+  await setCap('15');
+  assert.strictEqual(await statusAt(), 'orange');
+  await setCap('12');
+  assert.strictEqual(await statusAt(), 'red');
+  assert.match((await admin.get('/reports/leagues/Cap%20League')).text, /score-red[\s\S]*?23\.00<\/strong><span class="ts-cap"> \/ 12\.00/);
+  const summary = await admin.get(`/reports/teams?team=${caps.id}`);
+  assert.match(summary.text, /<strong>23\.00<\/strong><span class="ts-cap"> \/ 12\.00/);
+  assert.match(summary.text, /11\.00 points over the 12\.00 allowed/);
+  assert.match(summary.text, /1 unrated count as 0/);
+  assert.match(summary.text, /href="\/reports\/leagues\/Cap%20League"/, 'crumbs back to the league');
+
+  // Clearing the limit; only admins can set it
+  await setCap('');
+  assert.strictEqual(await statusAt(), 'none');
+  await h.createUser({ email: 'cap-rater@test.com', name: 'Cap Rater' });
+  const rater = await h.login(app, 'cap-rater@test.com');
+  assert.strictEqual((await h.post(rater, '/admin/league-caps', { division: 'Cap League', max_points: '99' })).status, 403);
+  assert.doesNotMatch((await rater.get('/reports/leagues/Cap%20League')).text, /Allowed points per team<\/strong>/);
+});

@@ -30,7 +30,7 @@ People choose **Rater** or **Viewer** when they request access. The admin alert 
 - **One rating per player per rater, per season.** This is enforced in the database. Submitting again in the same season shows:
   > You already rated this player. If you feel this is an error, or would like to change your rating, please contact an Admin
 - View submitted ratings and averages. Other raters show as "Rater 1", "Rater 2" by default.
-- Team summary report that mirrors the *Team Player Rating & Division Summary* sheet, and can be printed.
+- **Teams tab**: pick a league, then a team, to see its printable *Team Player Rating & Division Summary*. Each team has a **Score**: the sum of its regular players' final ratings (subs don't count; unrated players count 0). Admins set the **allowed points per team** for each league and season on the league page. The Score is **green** at or under the allowance, **yellow** up to 5 over, **orange** over 5 and up to 10 over, and **red** more than 10 over; with no allowance set it's grey.
 
 **Admins**
 - Approve or reject access requests (by email notification and on the Users page). Promote users to admin, disable accounts, reset a user's two-step verification.

@@ -1,0 +1,28 @@
+<%- include('../partials/head') %>
+<div class="page-head">
+  <div>
+    <h1>Teams</h1>
+    <p class="muted page-sub"><%= season.name %> · choose a league</p>
+  </div>
+</div>
+
+<% if (!leagues.length) { %>
+  <div class="card center"><p>No teams in <strong><%= season.name %></strong> yet.</p></div>
+<% } %>
+
+<div class="league-grid">
+  <% leagues.forEach(function (l) { const counts = { green: 0, yellow: 0, orange: 0, red: 0 }; l.teams.forEach(function (t) { if (counts[t.status] !== undefined) counts[t.status]++; }); %>
+    <a class="league-card" href="/reports/leagues/<%= l.key %>">
+      <span class="league-crest"><%= l.name %></span>
+      <span class="league-meta"><%= l.teams.length %> team<%= l.teams.length === 1 ? '' : 's' %> · <%= l.stats.players %> players</span>
+      <span class="league-meta"><%= l.cap !== null ? `Allowed ${fmt(l.cap)} points per team` : 'No points limit set' %></span>
+      <% if (l.cap !== null) { %>
+      <span class="league-foot">
+        <% ['green', 'yellow', 'orange', 'red'].forEach(function (c) { if (counts[c]) { %><span class="team-score score-<%= c %>"><strong><%= counts[c] %></strong></span><% } }) %>
+        <span class="small muted">teams by status</span>
+      </span>
+      <% } %>
+    </a>
+  <% }) %>
+</div>
+<%- include('../partials/foot') %>

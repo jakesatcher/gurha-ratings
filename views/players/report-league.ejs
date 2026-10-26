@@ -1,0 +1,41 @@
+<%- include('../partials/head') %>
+<p class="crumbs"><a href="/reports/teams">Teams</a> › <%= league.name %></p>
+<div class="page-head">
+  <div>
+    <h1><%= league.name %></h1>
+    <p class="muted page-sub"><%= season.name %> · <%= league.teams.length %> teams · <%= league.cap !== null ? `allowed ${fmt(league.cap)} points per team` : 'no points limit set' %></p>
+  </div>
+</div>
+
+<% if (currentUser.role === 'admin') { %>
+  <form method="post" action="/admin/league-caps" class="card inline-form">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <input type="hidden" name="division" value="<%= league.division || '' %>">
+    <label for="max-points"><strong>Allowed points per team</strong> <span class="small muted">(<%= season.name %>; leave blank for no limit)</span></label>
+    <input id="max-points" name="max_points" type="number" min="0" step="0.5" inputmode="decimal" value="<%= league.cap !== null ? league.cap : '' %>">
+    <button class="btn" type="submit">Save</button>
+  </form>
+<% } %>
+
+<p class="small muted score-key">
+  <span class="team-score score-green"><strong>Green</strong></span> at or under the limit ·
+  <span class="team-score score-yellow"><strong>Yellow</strong></span> up to 5 over ·
+  <span class="team-score score-orange"><strong>Orange</strong></span> 5–10 over ·
+  <span class="team-score score-red"><strong>Red</strong></span> more than 10 over.
+  Score is the sum of the regular players' final ratings (subs don't count; unrated players count 0).
+</p>
+
+<div class="team-grid">
+  <% league.teams.forEach(function (t) { %>
+    <a class="team-card" href="/reports/teams?team=<%= t.id %>">
+      <span class="team-name"><%= t.name %></span>
+      <span class="team-meta small"><%= t.counted %> players<%= t.unrated ? ` · ${t.unrated} unrated` : '' %></span>
+      <%- include('../partials/progress', { done: t.stats.rated, total: t.stats.players }) %>
+      <span class="league-foot">
+        <%- include('../partials/team-score', { s: t }) %>
+        <% if (t.over !== null && t.over > 0) { %><span class="small muted"><%= fmt(t.over) %> over</span><% } %>
+      </span>
+    </a>
+  <% }) %>
+</div>
+<%- include('../partials/foot') %>

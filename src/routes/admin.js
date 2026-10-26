@@ -341,6 +341,33 @@ router.post('/players/:id/delete', async (req, res) => {
   res.redirect('/admin/players');
 });
 
+// Allowed points for teams in a league this season (blank clears it).
+router.post('/league-caps', async (req, res) => {
+  const division = String(req.body.division || '').slice(0, 200);
+  const raw = String(req.body.max_points || '').trim();
+  const leagueUrl = `/reports/leagues/${division ? encodeURIComponent(division) : '_none'}`;
+  if (!req.season) return res.redirect('/reports/teams');
+  if (raw === '') {
+    await db.query('DELETE FROM league_caps WHERE season_id = $1 AND division = $2', [req.season.id, division]);
+    await audit(req.user.id, 'league_cap_cleared', 'season', req.season.id, { division });
+    req.flash('success', `Allowed points cleared for ${division || 'No league'}.`);
+    return res.redirect(leagueUrl);
+  }
+  const max = Number(raw);
+  if (!Number.isFinite(max) || max < 0 || max > 99999) {
+    req.flash('error', 'Allowed points must be a number of 0 or more.');
+    return res.redirect(leagueUrl);
+  }
+  await db.query(
+    `INSERT INTO league_caps (season_id, division, max_points, updated_by) VALUES ($1, $2, $3, $4)
+     ON CONFLICT (season_id, division) DO UPDATE SET max_points = EXCLUDED.max_points, updated_by = EXCLUDED.updated_by, updated_at = now()`,
+    [req.season.id, division, max, req.user.id]
+  );
+  await audit(req.user.id, 'league_cap_set', 'season', req.season.id, { division, max_points: max });
+  req.flash('success', `${division || 'No league'} teams are allowed ${max} points in ${req.season.name}.`);
+  res.redirect(leagueUrl);
+});
+
 router.post('/players/:id/override', async (req, res) => {
   if (!needSeason(req, res)) return;
   const entry = await roster.seasonPlayer(req.season.id, id(req));

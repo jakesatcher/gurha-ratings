@@ -8,6 +8,7 @@ const { audit } = require('../lib/audit');
 const R = require('../lib/ratings');
 const roster = require('../lib/roster');
 const { levelForScore } = require('../lib/levels');
+const TS = require('../lib/teamscore');
 
 const router = express.Router();
 
@@ -66,7 +67,7 @@ async function browseData(season, userId) {
   const leagues = new Map();
   for (const t of teamRows) {
     const key = leagueKey(t.division);
-    if (!leagues.has(key)) leagues.set(key, { key, name: t.division || 'No league', teams: [] });
+    if (!leagues.has(key)) leagues.set(key, { key, name: t.division || 'No league', division: t.division || null, teams: [] });
     leagues.get(key).teams.push(t);
   }
   for (const l of leagues.values()) {
@@ -245,17 +246,54 @@ router.post('/players/:id/rate', requireRater, async (req, res) => {
 
 // ---------- Team summary report (mirrors the GURHA Team Player Rating & Division Summary) ----------
 
+// ---------- Teams tab: league → team → team summary (with Score vs allowed points) ----------
+
+// Adds score / cap / status to each team in each league.
+function withScores(data, caps) {
+  for (const l of data.leagues) {
+    l.cap = caps.has(TS.capKey(l.division)) ? caps.get(TS.capKey(l.division)) : null;
+    for (const t of l.teams) {
+      const isSub = (p) => !p.memberships.some((m) => m.team_id === t.id && !m.is_sub);
+      Object.assign(t, TS.teamScore(t.members, data.summaries, isSub));
+      Object.assign(t, { cap: l.cap }, TS.capStatus(t.score, l.cap));
+    }
+  }
+  return data;
+}
+
 router.get('/reports/teams', requireAuth, async (req, res) => {
   if (!req.season) return noSeason(req, res);
-  const teams = await roster.seasonTeams(req.season.id);
-  const team = teams.find((t) => String(t.id) === String(req.query.team)) || null;
-  let players = [];
-  let summaries = new Map();
-  if (team) {
-    players = await roster.teamRoster(team.id);
-    summaries = await R.summariesForPlayers(players, req.season.id);
+  if (req.query.team) {
+    const team = await db.one('SELECT * FROM teams WHERE id = $1', [Number(req.query.team) || 0]);
+    if (!team) return res.status(404).render('error', { title: 'Not found', message: 'Team not found.' });
+    if (req.season.id !== team.season_id) {
+      req.session.seasonId = team.season_id;
+      return res.redirect(req.originalUrl);
+    }
+    const players = await roster.teamRoster(team.id);
+    const summaries = await R.summariesForPlayers(players, req.season.id);
+    const caps = await TS.leagueCaps(req.season.id);
+    const cap = caps.has(TS.capKey(team.division)) ? caps.get(TS.capKey(team.division)) : null;
+    const score = TS.teamScore(players, summaries, (p) => p.team_is_sub);
+    return res.render('players/team-report', {
+      title: `${team.name} summary`,
+      team,
+      players,
+      summaries,
+      score: { ...score, cap, ...TS.capStatus(score.score, cap) },
+      leagueHref: `/reports/leagues/${leagueKey(team.division)}`,
+    });
   }
-  res.render('players/team-report', { title: team ? `${team.name} summary` : 'Team summary', teams, team, players, summaries });
+  const data = withScores(await browseData(req.season, req.user.id), await TS.leagueCaps(req.season.id));
+  res.render('players/report-leagues', { title: 'Teams', ...data });
+});
+
+router.get('/reports/leagues/:key', requireAuth, async (req, res) => {
+  if (!req.season) return noSeason(req, res);
+  const data = withScores(await browseData(req.season, req.user.id), await TS.leagueCaps(req.season.id));
+  const league = data.leagues.find((l) => l.key === leagueKey(req.params.key === NO_LEAGUE ? null : req.params.key));
+  if (!league) return res.status(404).render('error', { title: 'Not found', message: `That league isn't in ${req.season.name}.` });
+  res.render('players/report-league', { title: `${league.name} teams`, league });
 });
 
 module.exports = router;

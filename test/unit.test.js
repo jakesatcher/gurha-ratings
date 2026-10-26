@@ -108,3 +108,21 @@ test('SportsEngine extractor finds players and carries team context', () => {
   assert.strictEqual(p.external_id, 'se:p1');
   assert.strictEqual(normalizePlayer(p).position, 'D');
 });
+
+test('team score colour: green at/under the limit, yellow ≤5 over, orange ≤10 over, red beyond', () => {
+  const { capStatus, teamScore } = require('../src/lib/teamscore');
+  const st = (score, cap) => capStatus(score, cap).status;
+  assert.strictEqual(st(50, 50), 'green');
+  assert.strictEqual(st(42.5, 50), 'green');
+  assert.strictEqual(st(50.01, 50), 'yellow');
+  assert.strictEqual(st(55, 50), 'yellow');
+  assert.strictEqual(st(55.5, 50), 'orange');
+  assert.strictEqual(st(60, 50), 'orange');
+  assert.strictEqual(st(60.5, 50), 'red');
+  assert.strictEqual(st(80, 50), 'red');
+  assert.strictEqual(st(80, null), 'none');
+  assert.strictEqual(capStatus(0.1 + 0.2 + 49.7, 50).status, 'green', 'floating-point noise does not tip it over');
+  const summaries = new Map([[1, { avgOverall: 7 }], [2, { avgOverall: 4.5 }], [3, { avgOverall: null }], [4, { avgOverall: 15 }]]);
+  const players = [{ id: 1 }, { id: 2 }, { id: 3 }, { id: 4, sub: true }];
+  assert.deepStrictEqual(teamScore(players, summaries, (p) => p.sub), { score: 11.5, counted: 3, unrated: 1 });
+});

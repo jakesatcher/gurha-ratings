@@ -633,3 +633,17 @@ h2 { text-transform: uppercase; font-weight: 600; }
 .se-filters { display: flex; flex-wrap: wrap; gap: .75rem; align-items: flex-end; margin-bottom: .75rem; }
 .se-filters label { margin: 0; }
 .se-current { border-left: 4px solid var(--brand-2); }
+
+/* ---------- Team Score vs allowed points ---------- */
+.team-score { display: inline-flex; align-items: baseline; gap: .25rem; padding: .2rem .6rem; border-radius: 999px; font-weight: 700; font-variant-numeric: tabular-nums; background: var(--border); color: var(--text, #0f172a); white-space: nowrap; }
+.team-score strong { font-size: 1.05em; }
+.team-score .ts-label { font-size: .75em; text-transform: uppercase; letter-spacing: .04em; opacity: .85; }
+.team-score .ts-cap { font-weight: 500; opacity: .85; }
+.score-green { background: #15803d; color: #fff; }
+.score-yellow { background: #facc15; color: #422006; }
+.score-orange { background: #ea580c; color: #fff; }
+.score-red { background: #dc2626; color: #fff; }
+.team-score-big { font-size: 1.5rem; padding: .35rem 1rem; }
+.report-score { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem 1rem; margin-top: .75rem; }
+.score-key .team-score { font-size: .8rem; }
+@media print { .team-score { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
