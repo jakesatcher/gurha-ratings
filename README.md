@@ -63,7 +63,7 @@ Raters give each player one overall rating: a level, then **Low / Medium / High*
 
 The form has one optional **Comments** box. Admins can still set a final level override per season.
 
-Ratings made while there were six separate categories were carried over: each one's weighted overall became its single rating, so averages didn't change. Their category scores still show on the player page for reference. The old categories are kept (inactive), and the Categories admin page is no longer in the menu.
+Ratings made under the earlier systems (separate Skating / Puck Skills / … categories, on either the 0–11 or the level scale) were removed by a one-time update, so only single overall ratings count. Each removed rating was copied into the **Audit log** first (action `rating_deleted`, with its scores and comments), and its rater can rate that player again. The old categories are kept (inactive), and the Categories admin page is no longer in the menu.
 
 ## Deploying on Railway
 

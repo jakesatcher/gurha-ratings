@@ -620,3 +620,33 @@ test('admins change or disqualify ratings only with a reason; disqualified ratin
     ['rating_reinstated', 'Talked to the rater; it was a mix-up'],
   ]);
 });
+
+test('migration 011 removes ratings made with separate categories, logging each one', async () => {
+  const fs = require('fs');
+  const path = require('path');
+  const sql = fs.readFileSync(path.join(__dirname, '..', 'src', 'db', 'migrations', '011_remove_category_ratings.sql'), 'utf8');
+  const season = await h.db.one(`INSERT INTO seasons (name) VALUES ('Cleanup Season') RETURNING id`);
+  const player = await h.db.one(`INSERT INTO players (first_name, last_name) VALUES ('Clean', 'Up') RETURNING id`);
+  const raters = [];
+  for (const e of ['c1', 'c2', 'c3']) raters.push((await h.createUser({ email: `${e}@cleanup.test`, name: e })).id);
+  const skating = (await h.db.one(`SELECT id FROM categories WHERE key = 'skating'`)).id;
+  const mk = async (rater, scale, cat, score, grade) => {
+    const r = await h.db.one('INSERT INTO ratings (season_id, player_id, rater_id, scale, evidence) VALUES ($1, $2, $3, $4, $5) RETURNING id', [season.id, player.id, rater, scale, 'note']);
+    await h.db.query('INSERT INTO rating_scores (rating_id, category_id, score, grade) VALUES ($1, $2, $3, $4)', [r.id, cat, score, grade]);
+    return r.id;
+  };
+  const oldScale = await mk(raters[0], 1, skating, 9, null); // 0–11 scale
+  const oldCats = await mk(raters[1], 2, skating, 8, 'D1/C2:H'); // level scale, by category
+  await h.db.query('INSERT INTO rating_scores (rating_id, category_id, score) VALUES ($1, $2, 8)', [oldCats, OVERALL]); // carried-over overall
+  const current = await mk(raters[2], 2, OVERALL, 7, 'D1/C2:M');
+
+  await h.db.query(sql);
+  const left = (await h.db.many('SELECT id FROM ratings WHERE player_id = $1', [player.id])).map((r) => r.id);
+  assert.deepStrictEqual(left, [current]);
+  const logged = await h.db.many(`SELECT entity_id, details FROM audit_log WHERE action = 'rating_deleted' AND entity_id = ANY($1::int[]) ORDER BY entity_id`, [[oldScale, oldCats]]);
+  assert.deepStrictEqual(logged.map((l) => [l.entity_id, l.details.scale, l.details.player_id]), [[oldScale, '0-11', player.id], [oldCats, 'levels', player.id]]);
+  assert.strictEqual(logged[0].details.scores[0].category, 'Skating');
+  // Running it again changes nothing
+  await h.db.query(sql);
+  assert.strictEqual((await h.db.one('SELECT count(*)::int AS n FROM ratings WHERE player_id = $1', [player.id])).n, 1);
+});
