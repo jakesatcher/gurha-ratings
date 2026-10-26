@@ -125,4 +125,7 @@ test('team score colour: green at/under the limit, yellow ≤5 over, orange ≤1
   const summaries = new Map([[1, { avgOverall: 7 }], [2, { avgOverall: 4.5 }], [3, { avgOverall: null }], [4, { avgOverall: 15 }]]);
   const players = [{ id: 1 }, { id: 2 }, { id: 3 }, { id: 4, sub: true }];
   assert.deepStrictEqual(teamScore(players, summaries, (p) => p.sub), { score: 11.5, counted: 3, unrated: 1 });
+  const { capFor } = require('../src/lib/teamscore');
+  assert.strictEqual(capFor(40), 54.4);
+  assert.strictEqual(capFor(33), 44.88);
 });

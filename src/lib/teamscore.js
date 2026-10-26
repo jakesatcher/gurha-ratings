@@ -26,9 +26,21 @@ function capStatus(score, cap) {
 
 const capKey = (division) => division || '';
 
+// Admins enter each league's per-team allowance; the cap teams are measured against is that allowance
+// × 1.36 (≈ 15 ÷ 11, the move from the old 0–11 points to the 0–15 scale).
+const CAP_MULTIPLIER = 1.36;
+const capFor = (allowance) => roundHalfUp(Number(allowance) * CAP_MULTIPLIER, 2);
+
+// division → cap (allowance × multiplier), for one season.
 async function leagueCaps(seasonId) {
+  const rows = await db.many('SELECT division, max_points FROM league_caps WHERE season_id = $1', [seasonId]);
+  return new Map(rows.map((r) => [r.division, capFor(r.max_points)]));
+}
+
+// division → the allowance as entered.
+async function leagueAllowances(seasonId) {
   const rows = await db.many('SELECT division, max_points FROM league_caps WHERE season_id = $1', [seasonId]);
   return new Map(rows.map((r) => [r.division, Number(r.max_points)]));
 }
 
-module.exports = { teamScore, capStatus, capKey, leagueCaps };
+module.exports = { CAP_MULTIPLIER, capFor, teamScore, capStatus, capKey, leagueCaps, leagueAllowances };

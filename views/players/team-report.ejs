@@ -22,7 +22,7 @@
     </dl>
     <div class="report-score">
       <%- include('../partials/team-score', { s: score, big: true }) %>
-      <span class="small muted"><% if (score.cap === null) { %>No points limit set for this league.<% } else if (score.over > 0) { %><%= fmt(score.over) %> points over the <%= fmt(score.cap) %> allowed.<% } else { %><%= fmt(-score.over) %> points under the <%= fmt(score.cap) %> allowed.<% } %>
+      <span class="small muted"><% if (score.cap === null) { %>No points limit set for this league.<% } else if (score.over > 0) { %><%= fmt(score.over) %> points over the <%= fmt(score.cap) %> cap.<% } else { %><%= fmt(-score.over) %> points under the <%= fmt(score.cap) %> cap.<% } %>
         Sum of <%= score.counted %> regular players' final ratings<%= score.unrated ? ` (${score.unrated} unrated count as 0)` : '' %>; subs aren't counted.</span>
     </div>
   </div>

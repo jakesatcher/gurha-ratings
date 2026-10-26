@@ -3,7 +3,7 @@
 <div class="page-head">
   <div>
     <h1><%= league.name %></h1>
-    <p class="muted page-sub"><%= season.name %> · <%= league.teams.length %> teams · <%= league.cap !== null ? `allowed ${fmt(league.cap)} points per team` : 'no points limit set' %></p>
+    <p class="muted page-sub"><%= season.name %> · <%= league.teams.length %> teams · <%= league.cap !== null ? `cap ${fmt(league.cap)} points per team (allowance ${fmt(league.allowance)} × ${multiplier})` : 'no points limit set' %></p>
   </div>
 </div>
 
@@ -11,9 +11,10 @@
   <form method="post" action="/admin/league-caps" class="card inline-form">
     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
     <input type="hidden" name="division" value="<%= league.division || '' %>">
-    <label for="max-points"><strong>Allowed points per team</strong> <span class="small muted">(<%= season.name %>; leave blank for no limit)</span></label>
-    <input id="max-points" name="max_points" type="number" min="0" step="0.5" inputmode="decimal" value="<%= league.cap !== null ? league.cap : '' %>">
+    <label for="max-points"><strong>Allowance per team</strong> <span class="small muted">(<%= season.name %>; the cap is this × <%= multiplier %>; leave blank for no limit)</span></label>
+    <input id="max-points" name="max_points" type="number" min="0" step="0.01" inputmode="decimal" value="<%= league.allowance !== null ? league.allowance : '' %>">
     <button class="btn" type="submit">Save</button>
+    <% if (league.cap !== null) { %><span class="small muted">Cap: <strong><%= fmt(league.cap) %></strong> points</span><% } %>
   </form>
 <% } %>
 

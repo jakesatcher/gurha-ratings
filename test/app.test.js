@@ -673,18 +673,20 @@ test('Teams tab: league → team summary with a Score coloured against the leagu
 
   const setCap = async (v) => h.post(admin, '/admin/league-caps', { division: 'Cap League', max_points: v }, '/reports/leagues/Cap%20League');
   const statusAt = async () => /team-score score-(\w+) team-score-big/.exec((await admin.get(`/reports/teams?team=${caps.id}`)).text)[1];
-  await setCap('23');
+  // Cap = allowance × 1.36
+  await setCap('17'); // cap 23.12
   assert.strictEqual(await statusAt(), 'green');
-  await setCap('20');
+  await setCap('15'); // cap 20.40, 2.60 over
   assert.strictEqual(await statusAt(), 'yellow');
-  await setCap('15');
+  await setCap('10'); // cap 13.60, 9.40 over
   assert.strictEqual(await statusAt(), 'orange');
-  await setCap('12');
+  await setCap('8'); // cap 10.88, 12.12 over
   assert.strictEqual(await statusAt(), 'red');
-  assert.match((await admin.get('/reports/leagues/Cap%20League')).text, /score-red[\s\S]*?23\.00<\/strong><span class="ts-cap"> \/ 12\.00/);
+  assert.match((await admin.get('/reports/leagues/Cap%20League')).text, /name="max_points"[^>]*value="8"[\s\S]*Cap: <strong>10\.88/);
+  assert.match((await admin.get('/reports/leagues/Cap%20League')).text, /score-red[\s\S]*?23\.00<\/strong><span class="ts-cap"> \/ 10\.88/);
   const summary = await admin.get(`/reports/teams?team=${caps.id}`);
-  assert.match(summary.text, /<strong>23\.00<\/strong><span class="ts-cap"> \/ 12\.00/);
-  assert.match(summary.text, /11\.00 points over the 12\.00 allowed/);
+  assert.match(summary.text, /<strong>23\.00<\/strong><span class="ts-cap"> \/ 10\.88/);
+  assert.match(summary.text, /12\.12 points over the 10\.88 cap/);
   assert.match(summary.text, /1 unrated count as 0/);
   assert.match(summary.text, /href="\/reports\/leagues\/Cap%20League"/, 'crumbs back to the league');
 

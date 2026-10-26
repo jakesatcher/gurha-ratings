@@ -7,6 +7,7 @@ const db = require('../db');
 const mailer = require('../lib/mailer');
 const emails = require('../lib/emails');
 const sportsengine = require('../lib/sportsengine');
+const TS = require('../lib/teamscore');
 const { requireAdmin } = require('../middleware/auth');
 const { verifyCsrf } = require('../middleware/security');
 const { audit } = require('../lib/audit');
@@ -364,7 +365,7 @@ router.post('/league-caps', async (req, res) => {
     [req.season.id, division, max, req.user.id]
   );
   await audit(req.user.id, 'league_cap_set', 'season', req.season.id, { division, max_points: max });
-  req.flash('success', `${division || 'No league'} teams are allowed ${max} points in ${req.season.name}.`);
+  req.flash('success', `${division || 'No league'} allowance set to ${max} (cap ${TS.capFor(max).toFixed(2)} points per team) for ${req.season.name}.`);
   res.redirect(leagueUrl);
 });
 

@@ -1,5 +1,5 @@
 <%# Team Score vs allowed points. Locals: s = { score, cap, status, over }, big (optional) %>
 <% const label = { green: 'At or under the limit', yellow: 'Up to 5 over', orange: '5–10 over', red: 'More than 10 over', none: 'No limit set' }[s.status]; %>
-<span class="team-score score-<%= s.status %><%= locals.big ? ' team-score-big' : '' %>" title="<%= label %><%= s.cap !== null ? ` (allowed ${fmt(s.cap)})` : '' %>">
+<span class="team-score score-<%= s.status %><%= locals.big ? ' team-score-big' : '' %>" title="<%= label %><%= s.cap !== null ? ` (cap ${fmt(s.cap)})` : '' %>">
   <span class="ts-label">Score</span> <strong><%= fmt(s.score) %></strong><% if (s.cap !== null) { %><span class="ts-cap"> / <%= fmt(s.cap) %></span><% } %>
 </span>

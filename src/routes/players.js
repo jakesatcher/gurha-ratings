@@ -293,7 +293,9 @@ router.get('/reports/leagues/:key', requireAuth, async (req, res) => {
   const data = withScores(await browseData(req.season, req.user.id), await TS.leagueCaps(req.season.id));
   const league = data.leagues.find((l) => l.key === leagueKey(req.params.key === NO_LEAGUE ? null : req.params.key));
   if (!league) return res.status(404).render('error', { title: 'Not found', message: `That league isn't in ${req.season.name}.` });
-  res.render('players/report-league', { title: `${league.name} teams`, league });
+  const allowances = await TS.leagueAllowances(req.season.id);
+  league.allowance = allowances.has(TS.capKey(league.division)) ? allowances.get(TS.capKey(league.division)) : null;
+  res.render('players/report-league', { title: `${league.name} teams`, league, multiplier: TS.CAP_MULTIPLIER });
 });
 
 module.exports = router;

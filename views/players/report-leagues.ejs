@@ -15,7 +15,7 @@
     <a class="league-card" href="/reports/leagues/<%= l.key %>">
       <span class="league-crest"><%= l.name %></span>
       <span class="league-meta"><%= l.teams.length %> team<%= l.teams.length === 1 ? '' : 's' %> · <%= l.stats.players %> players</span>
-      <span class="league-meta"><%= l.cap !== null ? `Allowed ${fmt(l.cap)} points per team` : 'No points limit set' %></span>
+      <span class="league-meta"><%= l.cap !== null ? `Cap ${fmt(l.cap)} points per team` : 'No points limit set' %></span>
       <% if (l.cap !== null) { %>
       <span class="league-foot">
         <% ['green', 'yellow', 'orange', 'red'].forEach(function (c) { if (counts[c]) { %><span class="team-score score-<%= c %>"><strong><%= counts[c] %></strong></span><% } }) %>
