@@ -35,7 +35,7 @@
         <tr>
           <td><%= i + 1 %></td>
           <td><%= p.team_jersey || '' %></td>
-          <td><a href="/players/<%= p.id %>"><%= p.first_name %> <%= p.last_name %></a><% if (p.team_is_sub) { %> <span class="tag">Sub</span><% } %><% if (s.needsReview) { %> <span class="tag tag-warn">3rd review</span><% } %></td>
+          <td><a href="/players/<%= p.id %>"><%= p.first_name %> <%= p.last_name %></a><% if (p.added_by) { %> <span class="tag tag-pending" title="<%= p.added_note || '' %>">Added</span><% } else if (p.team_is_sub) { %> <span class="tag">Sub</span><% } %><% if (s.needsReview) { %> <span class="tag tag-warn">3rd review</span><% } %></td>
           <td class="num"><%= fmt(s.avgOverall) %></td>
           <td><%- include('../partials/level', { level: s.level }) %><%= s.overridden ? ' *' : '' %></td>
           <td class="num"><%= s.count %></td>

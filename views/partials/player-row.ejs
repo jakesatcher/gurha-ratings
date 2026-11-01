@@ -5,7 +5,7 @@
     <span class="jersey"><%= j ? '#' + j : '–' %></span>
     <span class="player-main">
       <span class="player-name"><%= p.last_name %>, <%= p.first_name %>
-        <% if (locals.isSub) { %><span class="tag">Sub</span><% } %>
+        <% if (p.added_by) { %><span class="tag tag-pending" title="Added by a rater">Added</span><% } else if (locals.isSub) { %><span class="tag">Sub</span><% } %>
         <% if (!p.active) { %><span class="tag">inactive</span><% } %>
         <% if (s.needsReview) { %><span class="tag tag-warn" title="Raters differ by 2+ levels">3rd review</span><% } %>
       </span>
@@ -14,6 +14,7 @@
       <% } else if (p.position) { %>
         <span class="player-meta"><%= ({F:'Forward',D:'Defense',G:'Goalie'})[p.position] %></span>
       <% } %>
+      <% if (p.added_note) { %><span class="player-meta player-note">“<%= p.added_note %>”</span><% } %>
       <span class="player-meta"><%= s.count ? fmt(s.avgOverall) + ' avg · ' + s.count + ' rating' + (s.count === 1 ? '' : 's') : 'No ratings yet' %></span>
     </span>
     <span class="player-score"><%- include('level', { level: s.level }) %></span>

@@ -7,6 +7,7 @@
   </div>
   <div class="actions">
     <a class="btn btn-small" href="/reports/teams?team=<%= team.id %>">Team summary</a>
+    <% if (currentUser.canRate && season.ratings_open) { %><a class="btn btn-small" href="/teams/<%= team.id %>/add-player">+ Add unlisted player</a><% } %>
     <% if (currentUser.role === 'admin') { %>
     <form method="post" action="/admin/paper/forms" class="inline">
       <input type="hidden" name="_csrf" value="<%= csrfToken %>">
@@ -25,7 +26,7 @@
   <% if (currentUser.canRate) { %><div><span class="sb-num"><%= ratedByMe %></span><span class="sb-label">By you</span></div><% } %>
 </div>
 
-<% const regulars = players.filter(function (p) { return !p.team_is_sub; }); const subs = players.filter(function (p) { return p.team_is_sub; }); %>
+<% const regulars = players.filter(function (p) { return !p.team_is_sub; }); const subs = players.filter(function (p) { return p.team_is_sub && !p.added_by; }); const added = players.filter(function (p) { return p.team_is_sub && p.added_by; }); %>
 <% if (!players.length) { %><div class="card center"><p>No players on this team yet.</p></div><% } %>
 <ul class="player-list">
   <% regulars.forEach(function (p) { %>
@@ -37,6 +38,15 @@
   <ul class="player-list">
     <% subs.forEach(function (p) { %>
       <%- include('../partials/player-row', { p: p, s: summaries.get(p.id), rated: mine.has(p.id), jersey: p.team_jersey, isSub: true, hideTeams: true }) %>
+    <% }) %>
+  </ul>
+<% } %>
+<% if (added.length) { %>
+  <h2 class="section-title">Added by raters</h2>
+  <p class="small muted">Not on the roster, or not wearing their rostered number. These don't count toward the team Score.</p>
+  <ul class="player-list">
+    <% added.forEach(function (p) { %>
+      <%- include('../partials/player-row', { p: p, s: summaries.get(p.id), rated: mine.has(p.id), jersey: p.team_jersey, hideTeams: true }) %>
     <% }) %>
   </ul>
 <% } %>

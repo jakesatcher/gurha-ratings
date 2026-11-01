@@ -731,3 +731,67 @@ test('export: League, Team, Player, Number, Rating as CSV and a printable page',
   assert.match(page.text, /Alpha, Amy[\s\S]*Zulu, Zed/);
   assert.match((await admin.get('/reports/teams')).text, /href="\/reports\/export"/);
 });
+
+test('raters add unlisted players to a team, rate them, and admins merge them into the real player', async () => {
+  await h.createUser({ email: 'ul-admin@test.com', name: 'UL Admin', role: 'admin' });
+  const admin = await h.login(app, 'ul-admin@test.com');
+  await h.post(admin, '/admin/players', { first_name: 'Real', last_name: 'Rostered', team: 'Unlisted FC', division: 'UL League', jersey_number: '21' }, '/admin/players/new');
+  const real = await h.db.one(`SELECT id FROM players WHERE last_name = 'Rostered'`);
+  const team = await h.db.one(`SELECT id FROM teams WHERE name = 'Unlisted FC'`);
+  await h.createUser({ email: 'ul-rater@test.com', name: 'UL Rater' });
+  const rater = await h.login(app, 'ul-rater@test.com');
+
+  assert.match((await rater.get(`/teams/${team.id}`)).text, /Add unlisted player/);
+  const url = `/teams/${team.id}/add-player`;
+  const form = await rater.get(url);
+  assert.match(form.text, /Brief description/);
+
+  // Validation: needs a name or number, and a description
+  const empty = await h.post(rater, url, { name: '', number: '', note: '' }, url);
+  assert.strictEqual(empty.status, 422);
+  assert.match(empty.text, /Enter a name, a number, or both/);
+  assert.match(empty.text, /Add a brief description/);
+
+  // Number only → "Unlisted #12", added as a non-counting spot, straight to the rating form
+  const added = await h.post(rater, url, { name: '', number: '#12', note: 'Red helmet, wearing 12 but rostered as 21' }, url);
+  assert.strictEqual(added.status, 302);
+  const p = await h.db.one(`SELECT * FROM players WHERE added_by IS NOT NULL AND last_name = '#12'`);
+  assert.strictEqual(p.first_name, 'Unlisted');
+  assert.strictEqual(added.headers.location, `/players/${p.id}/rate`);
+  const spot = await h.db.one(`SELECT tr.jersey_number, tr.is_sub FROM team_rosters tr JOIN season_players sp ON sp.id = tr.season_player_id WHERE sp.player_id = $1`, [p.id]);
+  assert.deepStrictEqual([spot.jersey_number, spot.is_sub], ['12', true]);
+  assert.strictEqual((await h.post(rater, `/players/${p.id}/rate`, fullRating({ [S]: 'A' }))).status, 302);
+
+  // A second rater adding the same person reuses the record
+  await h.createUser({ email: 'ul-rater2@test.com', name: 'UL Rater Two' });
+  const rater2 = await h.login(app, 'ul-rater2@test.com');
+  const again = await h.post(rater2, url, { number: '12', note: 'same guy' }, url);
+  assert.strictEqual(again.headers.location, `/players/${p.id}/rate`);
+  assert.strictEqual((await h.db.one(`SELECT count(*)::int AS n FROM players WHERE added_by IS NOT NULL AND last_name = '#12'`)).n, 1);
+
+  // Name + number
+  await h.post(rater, url, { name: 'Mike Van Dam', number: '7', note: 'Not on the roster' }, url);
+  assert.ok(await h.db.one(`SELECT id FROM players WHERE first_name = 'Mike Van' AND last_name = 'Dam' AND added_by IS NOT NULL`));
+
+  // Team page lists them separately with the description; they don't count toward the Score
+  const teamPage = await rater.get(`/teams/${team.id}`);
+  assert.match(teamPage.text, /Added by raters[\s\S]*#12, Unlisted[\s\S]*Red helmet/);
+  assert.match((await admin.get(`/reports/teams?team=${team.id}`)).text, /Sum of 1 regular players/);
+  assert.match((await admin.get(`/reports/export.csv?team=${team.id}`)).text, /"#12, Unlisted \(Added\)",12,15\.00/);
+
+  // Viewers can't add
+  await h.createUser({ email: 'ul-viewer@test.com', name: 'UL Viewer', role: 'viewer' });
+  const viewer = await h.login(app, 'ul-viewer@test.com');
+  assert.strictEqual((await viewer.get(url)).status, 403);
+  assert.doesNotMatch((await viewer.get(`/teams/${team.id}`)).text, /Add unlisted player/);
+
+  // Admin sees who added them and merges them into the rostered player; the rating moves over
+  const page = await admin.get(`/players/${p.id}`);
+  assert.match(page.text, /Added by a rater<\/strong> \(UL Rater\)/);
+  assert.match(page.text, /this is really/);
+  await h.post(admin, '/admin/players/merge', { keep_id: String(real.id), drop_id: String(p.id), return_to: 'player' }, `/players/${p.id}`);
+  assert.strictEqual(await h.db.one('SELECT id FROM players WHERE id = $1', [p.id]), null);
+  assert.strictEqual((await h.db.one('SELECT count(*)::int AS n FROM ratings WHERE player_id = $1', [real.id])).n, 1);
+  const realSpot = await h.db.one(`SELECT tr.jersey_number, tr.is_sub FROM team_rosters tr JOIN season_players sp ON sp.id = tr.season_player_id WHERE sp.player_id = $1 AND tr.team_id = $2`, [real.id, team.id]);
+  assert.deepStrictEqual([realSpot.jersey_number, realSpot.is_sub], ['21', false], 'keeps the rostered number and regular spot');
+});

@@ -1,0 +1,24 @@
+<%- include('../partials/head') %>
+<p class="crumbs"><a href="/teams/<%= team.id %>">← <%= team.name %></a></p>
+<h1>Add a player to <%= team.name %></h1>
+<p class="muted page-sub">For someone who isn't on the roster, or isn't wearing their rostered number. They're added to <%= team.name %> so you can rate them; an admin can later match them to the right player.</p>
+
+<%- include('../partials/errors') %>
+
+<form method="post" action="/teams/<%= team.id %>/add-player" class="card stack">
+  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+  <div class="grid-2">
+    <label>Name <small class="muted">(if known)</small>
+      <input name="name" maxlength="100" autocomplete="off" value="<%= values.name || '' %>" placeholder="e.g. Mike Smith"></label>
+    <label>Number <small class="muted">(the number they're wearing)</small>
+      <input name="number" maxlength="5" inputmode="numeric" autocomplete="off" value="<%= values.number || '' %>" placeholder="e.g. 12"></label>
+  </div>
+  <label>Brief description <small class="muted">(required, up to 200 characters)</small>
+    <input name="note" maxlength="200" required autocomplete="off" value="<%= values.note || '' %>" placeholder="e.g. Red helmet, left-handed D, wearing #12 but rostered as #21"></label>
+  <p class="small muted">Enter a name, a number, or both. Added players are listed under "Added by raters" on the team and don't count toward the team Score.</p>
+  <div class="actions">
+    <button class="btn btn-primary" type="submit">Add &amp; rate</button>
+    <a class="btn" href="/teams/<%= team.id %>">Cancel</a>
+  </div>
+</form>
+<%- include('../partials/foot') %>

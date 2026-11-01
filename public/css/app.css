@@ -106,7 +106,8 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 1.25rem 0; }
   .grid-2 { grid-template-columns: 1fr 1fr; }
   .grid-4 { grid-template-columns: repeat(4, 1fr); }
 }
-.page-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.page-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0 1rem; }
+@media (max-width: 640px) { .page-head > .actions { width: 100%; margin-top: 0; } }
 .page-head h1 { margin-bottom: .75rem; }
 .crumbs { margin: 0 0 .5rem; }
 .crumbs a { text-decoration: none; }
@@ -656,3 +657,4 @@ h2 { text-transform: uppercase; font-weight: 600; }
   .export-table tr { break-inside: avoid; }
   .export-table thead { display: table-header-group; }
 }
+.player-note { font-style: italic; }

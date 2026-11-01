@@ -24,6 +24,22 @@
   </div>
 </section>
 
+<% if (player.added_by) { %>
+  <div class="alert alert-info"><strong>Added by a rater</strong><%= isAdmin && locals.addedByName ? ` (${addedByName})` : '' %>: “<%= player.added_note %>”</div>
+  <% if (isAdmin && matchChoices.length) { %>
+    <form method="post" action="/admin/players/merge" class="card inline-form" data-confirm="Merge <%= player.first_name %> <%= player.last_name %> into the chosen player? Their ratings and team spot move over, and this record is removed.">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <input type="hidden" name="drop_id" value="<%= player.id %>">
+      <input type="hidden" name="return_to" value="player">
+      <label for="match-keep"><strong>Admin: this is really…</strong></label>
+      <select id="match-keep" name="keep_id" required>
+        <option value="">Choose the rostered player</option>
+        <% matchChoices.forEach(function (x) { %><option value="<%= x.id %>"><%= x.team || 'No team' %> · <%= x.jersey_number ? `#${x.jersey_number} ` : '' %><%= x.last_name %>, <%= x.first_name %></option><% }) %>
+      </select>
+      <button class="btn" type="submit">Merge</button>
+    </form>
+  <% } %>
+<% } %>
 <% if (!onRoster) { %>
   <div class="alert alert-info"><%= player.first_name %> isn't on the <strong><%= season ? season.name : '' %></strong> roster.<% if (isAdmin) { %> <a href="/admin/players/<%= player.id %>/edit">Add them to this season</a>.<% } %></div>
 <% } else if (!season.ratings_open && currentUser.canRate) { %>

@@ -10,6 +10,7 @@ const roster = require('../lib/roster');
 const { levelForScore } = require('../lib/levels');
 const TS = require('../lib/teamscore');
 const { toCsv } = require('../lib/csv');
+const { nameKey } = require('../lib/identity');
 
 const router = express.Router();
 
@@ -122,6 +123,84 @@ router.get('/teams/:id', requireAuth, async (req, res) => {
   });
 });
 
+// ---------- Raters add unlisted players to a team ----------
+
+// Someone not on the roster (or not wearing their rostered number): a name and/or number plus a short
+// description. They join the team as an "added" spot that doesn't count toward the team Score, and
+// admins can later merge them into the real player from Admin → Duplicates.
+async function addableTeam(req, res) {
+  const team = await db.one('SELECT * FROM teams WHERE id = $1', [Number(req.params.id) || 0]);
+  if (!team) {
+    res.status(404).render('error', { title: 'Not found', message: 'Team not found.' });
+    return null;
+  }
+  const season = await db.one('SELECT * FROM seasons WHERE id = $1', [team.season_id]);
+  if (!season.ratings_open) {
+    res.status(403).render('error', { title: 'Ratings closed', message: `Ratings for ${season.name} are closed, so players can't be added.` });
+    return null;
+  }
+  return team;
+}
+
+function parseAddedPlayer(body) {
+  const name = String(body.name || '').trim().replace(/\s+/g, ' ').slice(0, 100);
+  const number = String(body.number || '').trim().replace(/^#/, '').slice(0, 5);
+  const note = String(body.note || '').trim().replace(/\s+/g, ' ').slice(0, 200);
+  const errors = [];
+  if (!name && !number) errors.push('Enter a name, a number, or both.');
+  if (number && !/^[0-9A-Za-z]{1,5}$/.test(number)) errors.push('The number can only contain letters and digits (e.g. 12 or 00).');
+  if (/[<>]/.test(name)) errors.push("The name can't contain < or >.");
+  if (!note) errors.push('Add a brief description so admins can tell who this is (e.g. "red helmet, left-handed D, wearing #12 but rostered as #21").');
+  const words = name ? name.split(' ') : [];
+  const first = words.length > 1 ? words.slice(0, -1).join(' ') : words[0] || 'Unlisted';
+  const last = words.length > 1 ? words[words.length - 1] : number ? `#${number}` : '(unlisted)';
+  return { name, number, note, first, last, errors };
+}
+
+router.get('/teams/:id/add-player', requireRater, async (req, res) => {
+  const team = await addableTeam(req, res);
+  if (!team) return;
+  res.render('players/add-player', { title: `Add a player to ${team.name}`, team, values: {}, errors: [] });
+});
+
+router.post('/teams/:id/add-player', requireRater, async (req, res) => {
+  const team = await addableTeam(req, res);
+  if (!team) return;
+  const v = parseAddedPlayer(req.body);
+  if (v.errors.length) {
+    return res.status(422).render('players/add-player', { title: `Add a player to ${team.name}`, team, values: req.body, errors: v.errors });
+  }
+  // Two raters adding the same unlisted person: reuse the earlier entry instead of making a second one.
+  const existing = await db.one(
+    `SELECT p.id FROM players p
+       JOIN season_players sp ON sp.player_id = p.id AND sp.season_id = $1
+       JOIN team_rosters tr ON tr.season_player_id = sp.id AND tr.team_id = $2
+      WHERE p.added_by IS NOT NULL AND lower(p.first_name) = lower($3) AND lower(p.last_name) = lower($4)
+        AND coalesce(tr.jersey_number, '') = $5
+      LIMIT 1`,
+    [team.season_id, team.id, v.first, v.last, v.number]
+  );
+  if (existing) {
+    req.flash('info', `${v.first} ${v.last} was already added to ${team.name}. Rate them here.`);
+    return res.redirect(`/players/${existing.id}/rate`);
+  }
+  const player = await db.tx(async (c) => {
+    const { rows } = await c.query(
+      `INSERT INTO players (first_name, last_name, name_key, source, added_by, added_note) VALUES ($1, $2, $3, 'manual', $4, $5) RETURNING id`,
+      [v.first, v.last, nameKey(v.first, v.last), req.user.id, v.note]
+    );
+    const spId = await roster.ensureSeasonPlayer(c, team.season_id, rows[0].id, 'rater');
+    await roster.upsertMembership(c, spId, { team_id: team.id, jersey_number: v.number || null, is_sub: true, source: 'rater' });
+    await audit(req.user.id, 'player_added_by_rater', 'player', rows[0].id, {
+      team: team.name, team_id: team.id, season_id: team.season_id, name: v.name || null, number: v.number || null, description: v.note,
+    }, c);
+    return rows[0];
+  });
+  req.session.seasonId = team.season_id;
+  req.flash('success', `Added ${v.first} ${v.last} to ${team.name}.`);
+  res.redirect(`/players/${player.id}/rate`);
+});
+
 // ---------- Search / filtered list ----------
 
 router.get('/players', requireAuth, async (req, res) => {
@@ -167,6 +246,13 @@ router.get('/players/:id', requireAuth, async (req, res) => {
   });
   const history = await R.playerHistory(playerId);
   res.render('players/show', {
+    addedByName: base.added_by ? ((await db.one('SELECT name FROM users WHERE id = $1', [base.added_by])) || {}).name : null,
+    // Admins can match a rater-added player to the rostered player they really are.
+    matchChoices: base.added_by && req.user.role === 'admin' && req.season
+      ? (await roster.searchRoster(req.season.id, { includeInactive: true }))
+          .filter((x) => x.id !== base.id && !x.added_by)
+          .sort((x, y) => (x.team || '').localeCompare(y.team || '') || x.last_name.localeCompare(y.last_name))
+      : [],
     title: `${player.first_name} ${player.last_name}`,
     player,
     onRoster: Boolean(entry),
@@ -327,7 +413,7 @@ async function exportRows(req) {
         rows.push({
           league: l.division || 'No league',
           team: t.name,
-          player: `${p.last_name}, ${p.first_name}${sub ? ' (Sub)' : ''}`,
+          player: `${p.last_name}, ${p.first_name}${p.added_by ? ' (Added)' : sub ? ' (Sub)' : ''}`,
           number: jersey || '',
           rating: s.avgOverall,
           level: s.level,
