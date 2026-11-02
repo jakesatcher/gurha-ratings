@@ -15,12 +15,21 @@
       <label>Email <input name="email" type="email" value="<%= player.email || '' %>" maxlength="200"></label>
     </div>
     <label>Notes <textarea name="notes" rows="2" maxlength="2000"><%= player.notes || '' %></textarea></label>
+    <% if (player.added_by) { %>
+      <label>Rater's description <small class="muted">(this player was added by a rater)</small>
+        <input name="added_note" maxlength="200" value="<%= player.added_note || '' %>"></label>
+    <% } %>
     <% if (!isNew) { %>
       <label class="check"><input type="checkbox" name="active" <%= player.active ? 'checked' : '' %>> Active (visible to raters)</label>
       <% if (externalIds.length) { %><p class="small muted">SportsEngine registration IDs: <%= externalIds.map(function (x) { return x.replace(/^se:/, ''); }).join(', ') %></p><% } %>
     <% } %>
 
     <h2><%= season.name %> roster</h2>
+    <% if (!isNew && !entry.on_roster && rosteredIn.length) { %>
+      <div class="alert alert-info"><%= player.first_name %> isn't on the <%= season.name %> roster. Edit their roster entry in:
+        <% rosteredIn.forEach(function (s, i) { %><%= i ? ', ' : '' %><a href="/admin/players/<%= player.id %>/edit?season=<%= s.id %>"><%= s.name %></a><% }) %>.
+        Or tick the box below to add them to <%= season.name %>.</div>
+    <% } %>
     <% if (!isNew) { %>
       <label class="check"><input type="checkbox" name="on_roster" <%= entry.on_roster ? 'checked' : '' %>> On the <%= season.name %> roster</label>
     <% } %>
@@ -40,6 +49,7 @@
     <% }) %>
     <datalist id="team-options"><% teams.forEach(function (t) { %><option value="<%= t.name %>"><% }) %></datalist>
     <h3><%= (entry.memberships || []).length ? 'Add to another team' : 'Team' %></h3>
+    <% if ((entry.memberships || []).length) { %><p class="small muted">To change this player's number on <%= entry.memberships.length === 1 ? (entry.memberships[0].team || 'their team') : 'a team' %>, edit the Jersey box above. Only fill this in to put them on another team.</p><% } %>
     <div class="grid-2">
       <label>Team <input name="team" value="<%= entry.team && !(entry.memberships || []).length ? entry.team : '' %>" maxlength="100" list="team-options" placeholder="Pick or type a new team"></label>
       <label>League / division <small class="muted">(applies to the team)</small> <input name="division" maxlength="100"></label>

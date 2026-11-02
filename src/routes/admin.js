@@ -264,7 +264,16 @@ async function renderPlayerForm(req, res, { player, entry, errors = [], status =
   const externalIds = player.id
     ? (await db.many('SELECT external_id FROM player_external_ids WHERE player_id = $1 ORDER BY id', [player.id])).map((r) => r.external_id)
     : [];
+  // Seasons this player is rostered in, so the form can point to them when they're not on this one.
+  const rosteredIn = player.id
+    ? await db.many(
+        `SELECT s.id, s.name FROM season_players sp JOIN seasons s ON s.id = sp.season_id WHERE sp.player_id = $1
+          ORDER BY coalesce(s.start_date, s.created_at::date) DESC, s.id DESC`,
+        [player.id]
+      )
+    : [];
   res.status(status).render('admin/player-form', {
+    rosteredIn,
     title: player.id ? 'Edit player' : 'Add player',
     player,
     entry,
@@ -305,6 +314,12 @@ router.get('/players/:id/edit', async (req, res) => {
   if (!needSeason(req, res)) return;
   const player = await db.one('SELECT * FROM players WHERE id = $1', [id(req)]);
   if (!player) return res.redirect('/admin/players');
+  // ?season=<id> switches the season being edited (links from the "not on this roster" notice).
+  if (req.query.season) {
+    const s = await db.one('SELECT id FROM seasons WHERE id = $1', [Number(req.query.season) || 0]);
+    if (s) req.session.seasonId = s.id;
+    return res.redirect(`/admin/players/${player.id}/edit`);
+  }
   const entry = await roster.seasonPlayer(req.season.id, player.id);
   await renderPlayerForm(req, res, { player, entry: entry ? { ...entry, on_roster: true } : { on_roster: false, memberships: [] } });
 });
@@ -316,19 +331,54 @@ router.post('/players/:id', async (req, res) => {
   const p = playerFromBody({ ...req.body, active: req.body.active || 'off' });
   p.name_key = nameKey(p.first_name, p.last_name);
   const e = entryFromBody({ ...req.body, on_roster: req.body.on_roster || 'off' });
-  if (!p.first_name || !p.last_name) {
-    const entry = await roster.seasonPlayer(req.season.id, existing.id);
-    return renderPlayerForm(req, res, { player: { ...existing, ...p }, entry: entry ? { ...entry, on_roster: true } : { on_roster: false, memberships: [] }, errors: ['First and last name are required.'], status: 422 });
+  const before = await roster.seasonPlayer(req.season.id, existing.id);
+  const errors = [];
+  if (!p.first_name || !p.last_name) errors.push('First and last name are required.');
+  // A number (or position) typed in the "add to a team" section without a team: if the player has
+  // exactly one team spot, it's meant for that spot; otherwise ask which team, rather than dropping it.
+  const looseAdd = !e.add.team && (e.add.jersey_number || e.add.position || e.add.is_sub);
+  const keptSpots = e.updates.filter((u) => !u.remove);
+  if (looseAdd && e.on_roster) {
+    if (keptSpots.length === 1) {
+      if (e.add.jersey_number) keptSpots[0].jersey_number = e.add.jersey_number;
+      if (e.add.position) keptSpots[0].position = e.add.position;
+      if (e.add.is_sub) keptSpots[0].is_sub = true;
+      e.add = { team: null };
+    } else if (keptSpots.length > 1) {
+      errors.push('Choose a team for the new jersey number, or change the number in that team\'s box above.');
+    }
+  }
+  if (looseAdd && !e.on_roster) errors.push(`Tick "On the ${req.season.name} roster" to give this player a number.`);
+  if (e.add.team && !e.on_roster) errors.push(`Tick "On the ${req.season.name} roster" to add this player to a team.`);
+  if (errors.length) {
+    return renderPlayerForm(req, res, {
+      player: { ...existing, ...p },
+      entry: before ? { ...before, on_roster: e.on_roster } : { on_roster: e.on_roster, memberships: [] },
+      errors,
+      status: 422,
+    });
   }
   await db.tx(async (c) => {
     await c.query(
       `UPDATE players SET ${PLAYER_COLS.map((col, i) => `${col} = $${i + 1}`).join(', ')}, updated_at = now() WHERE id = $${PLAYER_COLS.length + 1}`,
       [...PLAYER_COLS.map((col) => p[col]), existing.id]
     );
+    if (existing.added_by && req.body.added_note !== undefined) {
+      await c.query('UPDATE players SET added_note = $1 WHERE id = $2', [String(req.body.added_note || '').trim().slice(0, 200) || null, existing.id]);
+    }
     await saveEntry(c, req.season.id, existing.id, e);
-    await audit(req.user.id, 'player_updated', 'player', existing.id, { season_id: req.season.id, on_roster: e.on_roster }, c);
   });
-  req.flash('success', 'Player updated.');
+  // Say exactly what changed, so it's obvious the save worked (or that nothing was different).
+  const after = await roster.seasonPlayer(req.season.id, existing.id);
+  const spotText = (r) => (r ? r.memberships.map((m) => `${m.team || 'No team'}${m.jersey_number ? ` #${m.jersey_number}` : ''}${m.is_sub ? ' (sub)' : ''}`).sort().join(', ') : 'not on the roster');
+  const changes = [];
+  if (existing.first_name !== p.first_name || existing.last_name !== p.last_name) changes.push(`name ${existing.first_name} ${existing.last_name} → ${p.first_name} ${p.last_name}`);
+  for (const col of ['birth_date', 'age', 'email', 'notes', 'active']) {
+    if (String(existing[col] ?? '') !== String(p[col] ?? '')) changes.push(col.replace('_', ' '));
+  }
+  if (spotText(before) !== spotText(after)) changes.push(`${req.season.name} roster: ${spotText(before)} → ${spotText(after)}`);
+  await audit(req.user.id, 'player_updated', 'player', existing.id, { season_id: req.season.id, changes });
+  req.flash(changes.length ? 'success' : 'info', changes.length ? `Saved: ${changes.join('; ')}.` : 'No changes to save.');
   res.redirect(`/players/${existing.id}`);
 });
 

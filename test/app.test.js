@@ -795,3 +795,44 @@ test('raters add unlisted players to a team, rate them, and admins merge them in
   const realSpot = await h.db.one(`SELECT tr.jersey_number, tr.is_sub FROM team_rosters tr JOIN season_players sp ON sp.id = tr.season_player_id WHERE sp.player_id = $1 AND tr.team_id = $2`, [real.id, team.id]);
   assert.deepStrictEqual([realSpot.jersey_number, realSpot.is_sub], ['21', false], 'keeps the rostered number and regular spot');
 });
+
+test('editing a player: name and number changes save, show what changed, and typed numbers are never dropped', async () => {
+  await h.createUser({ email: 'ed-admin@test.com', name: 'Ed Admin', role: 'admin' });
+  const admin = await h.login(app, 'ed-admin@test.com');
+  await h.post(admin, '/admin/players', { first_name: 'Eddie', last_name: 'Edit', team: 'Editors', division: 'Ed League', jersey_number: '9' }, '/admin/players/new');
+  const p = await h.db.one(`SELECT id FROM players WHERE last_name = 'Edit'`);
+  const editUrl = `/admin/players/${p.id}/edit`;
+  const spotId = () => h.db.one(`SELECT tr.id FROM team_rosters tr JOIN season_players sp ON sp.id = tr.season_player_id WHERE sp.player_id = $1`, [p.id]);
+  const jersey = async () => (await h.db.one(`SELECT tr.jersey_number FROM team_rosters tr JOIN season_players sp ON sp.id = tr.season_player_id WHERE sp.player_id = $1`, [p.id])).jersey_number;
+  const base = async () => {
+    const s = await spotId();
+    return { first_name: 'Eddie', last_name: 'Edit', active: 'on', on_roster: 'on', membership_ids: String(s.id), [`m_${s.id}_jersey`]: '9' };
+  };
+
+  // Change the name and the number in the team's box
+  const s1 = await spotId();
+  const r1 = await h.post(admin, `/admin/players/${p.id}`, { ...(await base()), first_name: 'Edward', [`m_${s1.id}_jersey`]: '19' }, editUrl);
+  assert.strictEqual(r1.status, 302);
+  const shown = await admin.get(`/players/${p.id}`);
+  assert.match(shown.text, /Saved: name Eddie Edit → Edward Edit; .*Editors #9 → Editors #19/);
+  assert.match(shown.text, /Edward Edit/);
+  assert.strictEqual(await jersey(), '19');
+  assert.match((await admin.get(`/players/${p.id}`)).headers['cache-control'], /no-store/);
+
+  // A number typed in the "add to a team" box with no team goes to the player's only team
+  await h.post(admin, `/admin/players/${p.id}`, { ...(await base()), first_name: 'Edward', [`m_${s1.id}_jersey`]: '19', jersey_number: '27' }, editUrl);
+  assert.strictEqual(await jersey(), '27');
+
+  // Saving with nothing different says so
+  await h.post(admin, `/admin/players/${p.id}`, { ...(await base()), first_name: 'Edward', [`m_${s1.id}_jersey`]: '27' }, editUrl);
+  assert.match((await admin.get(`/players/${p.id}`)).text, /No changes to save/);
+
+  // With two teams, a loose number is an error rather than being dropped
+  await h.post(admin, `/admin/players/${p.id}`, { ...(await base()), first_name: 'Edward', [`m_${s1.id}_jersey`]: '27', team: 'Second Team' }, editUrl);
+  const spots = await h.db.many(`SELECT tr.id FROM team_rosters tr JOIN season_players sp ON sp.id = tr.season_player_id WHERE sp.player_id = $1 ORDER BY tr.id`, [p.id]);
+  assert.strictEqual(spots.length, 2);
+  const two = { first_name: 'Edward', last_name: 'Edit', active: 'on', on_roster: 'on', membership_ids: spots.map((x) => String(x.id)), [`m_${spots[0].id}_jersey`]: '27', [`m_${spots[1].id}_jersey`]: '', jersey_number: '5' };
+  const bad = await h.post(admin, `/admin/players/${p.id}`, two, editUrl);
+  assert.strictEqual(bad.status, 422);
+  assert.match(bad.text, /Choose a team for the new jersey number/);
+});

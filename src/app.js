@@ -132,6 +132,11 @@ function createApp() {
   app.use(requirePasswordUpdate);
   app.use(loadSeason);
 
+  // Pages show live data: don't let browsers (or the back button) show a stale copy after a change.
+  app.use((req, res, next) => {
+    res.set('Cache-Control', 'no-store');
+    next();
+  });
   app.use(require('./routes/auth'));
   app.use(require('./routes/account'));
   app.use(require('./routes/players'));
