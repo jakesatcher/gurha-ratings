@@ -836,3 +836,22 @@ test('editing a player: name and number changes save, show what changed, and typ
   assert.strictEqual(bad.status, 422);
   assert.match(bad.text, /Choose a team for the new jersey number/);
 });
+
+test('Players tab: "All unrated players" lists everyone with no ratings yet', async () => {
+  await h.createUser({ email: 'unr-admin@test.com', name: 'Unr Admin', role: 'admin' });
+  const admin = await h.login(app, 'unr-admin@test.com');
+  await h.post(admin, '/admin/players', { first_name: 'Nora', last_name: 'Norated', team: 'Unrated U', division: 'UR' }, '/admin/players/new');
+  await h.post(admin, '/admin/players', { first_name: 'Rhea', last_name: 'Ratedone', team: 'Unrated U', division: 'UR' }, '/admin/players/new');
+  const rated = await h.db.one(`SELECT id FROM players WHERE last_name = 'Ratedone'`);
+  await h.post(admin, `/players/${rated.id}/rate`, fullRating());
+
+  await h.createUser({ email: 'unr-viewer@test.com', name: 'Unr Viewer', role: 'viewer' });
+  for (const who of [admin, await h.login(app, 'unr-viewer@test.com')]) {
+    assert.match((await who.get('/players')).text, /href="\/players\?status=none">All unrated players/);
+    const list = await who.get('/players?status=none');
+    assert.match(list.text, /<h1>All unrated players<\/h1>/);
+    assert.match(list.text, /Norated, Nora/);
+    assert.doesNotMatch(list.text, /Ratedone, Rhea/);
+    assert.match(list.text, /players? with no ratings yet in/);
+  }
+});

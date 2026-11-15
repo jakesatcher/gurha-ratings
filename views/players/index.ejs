@@ -1,7 +1,8 @@
 <%- include('../partials/head') %>
-<p class="crumbs"><a href="/players">Leagues</a> › Search</p>
+<% const unratedView = filters.status === 'none'; %>
+<p class="crumbs"><a href="/players">Leagues</a> › <%= unratedView ? 'All unrated players' : 'Search' %></p>
 <div class="page-head">
-  <h1>Players</h1>
+  <h1><%= unratedView ? 'All unrated players' : 'Players' %></h1>
   <% if (currentUser.role === 'admin') { %><a class="btn btn-small" href="/admin/players/new">+ Add player</a><% } %>
 </div>
 
@@ -35,10 +36,10 @@
   </div>
 </form>
 
-<p class="muted small"><%= players.length %> player<%= players.length === 1 ? '' : 's' %></p>
+<p class="muted small"><%= players.length %> player<%= players.length === 1 ? '' : 's' %><%= unratedView ? ` with no ratings yet in ${season.name}` : '' %></p>
 
 <% if (!players.length) { %>
-  <div class="card center"><p>No players found on the <strong><%= season.name %></strong> roster.</p>
+  <div class="card center"><p><%= unratedView ? 'Every player on the ' : 'No players found on the ' %><strong><%= season.name %></strong> roster<%= unratedView ? ' has at least one rating.' : '.' %></p>
     <% if (currentUser.role === 'admin') { %><p><a href="/admin/sportsengine">Import from SportsEngine</a>, <a href="/admin/import">upload a file</a> or <a href="/admin/players/new">add a player</a>.</p><% } %>
   </div>
 <% } else { %>
