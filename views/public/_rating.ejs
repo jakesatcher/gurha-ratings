@@ -1,0 +1,1 @@
+<% if (r) { %><span class="public-rating"><%- include('../partials/level', { level: r.level }) %><% if (r.points !== null && r.points !== undefined) { %> <strong><%= fmt(r.points) %></strong><% } %></span><% } else { %><span class="muted">Not rated yet</span><% } %>

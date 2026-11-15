@@ -118,6 +118,26 @@ function accessRejected({ name }) {
   };
 }
 
+// ---------- Rating contests ----------
+
+function ratingContest({ playerName, teams, name, email, relationship, message, reviewUrl, openCount }) {
+  return {
+    kind: 'rating_contest',
+    subject: `Rating contest: ${playerName}`,
+    text: `${name} (${email})${relationship ? `, ${relationship},` : ''} is contesting ${playerName}'s rating${teams ? ` (${teams})` : ''}.\n\n"${message}"\n\n${openCount} open contest(s). Review: ${reviewUrl}\nReply to this email to answer ${name}.`,
+    html: layout({
+      preheader: `${name} is contesting ${playerName}'s rating.`,
+      heading: 'Rating contested',
+      body:
+        p(`<strong>${esc(name)}</strong> (${esc(email)})${relationship ? `, ${esc(relationship)},` : ''} is contesting <strong>${esc(playerName)}</strong>'s rating${teams ? ` (${esc(teams)})` : ''}.`) +
+        `<blockquote style="margin:0 0 14px;padding:10px 14px;background:#f1f5f9;border-left:4px solid ${NAVY};border-radius:6px;white-space:pre-wrap">${esc(message)}</blockquote>` +
+        p(`${openCount} open contest${openCount === 1 ? '' : 's'}. Reply to this email to answer ${esc(name)}.`) +
+        button(reviewUrl, 'Review contests'),
+      footer: `You get these because you're a GURHA Ratings admin. Turn them off on <a href="${config.appUrl}/account" style="color:#64748b">your account page</a>.`,
+    }),
+  };
+}
+
 // ---------- Password & security ----------
 
 function passwordReset({ link }) {
@@ -169,4 +189,4 @@ function test({ name }) {
   };
 }
 
-module.exports = { layout, code, accessRequested, accessApproved, accessRejected, passwordReset, securityNotice, test };
+module.exports = { layout, ratingContest, code, accessRequested, accessApproved, accessRejected, passwordReset, securityNotice, test };

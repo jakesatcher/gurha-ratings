@@ -658,3 +658,15 @@ h2 { text-transform: uppercase; font-weight: 600; }
   .export-table thead { display: table-header-group; }
 }
 .player-note { font-style: italic; }
+
+/* ---------- Public pages ---------- */
+.public-hero h1 { margin-bottom: .2rem; }
+.public-search { display: flex; gap: .5rem; margin-top: .75rem; }
+.public-search input { flex: 1; margin: 0; font-size: 1.05rem; }
+.public-rating { display: inline-flex; align-items: center; gap: .4rem; white-space: nowrap; }
+.public-list .player-link { padding-right: .9rem; }
+.plain-list { list-style: none; margin: 0; padding: 0; }
+.sr-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.hp-field { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
+.contest-message { margin: .5rem 0 .75rem; padding: .6rem .9rem; background: var(--surface-2); border-left: 4px solid var(--brand-2); border-radius: 6px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.contest h2 { margin: 0; font-size: 1.1rem; }

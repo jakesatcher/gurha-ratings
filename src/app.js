@@ -137,12 +137,12 @@ function createApp() {
     res.set('Cache-Control', 'no-store');
     next();
   });
+  app.use(require('./routes/public'));
   app.use(require('./routes/auth'));
   app.use(require('./routes/account'));
   app.use(require('./routes/players'));
   app.use('/admin', require('./routes/admin'));
 
-  app.get('/', (req, res) => res.redirect(req.user ? '/players' : '/login'));
 
   app.use((req, res) => {
     res.status(404).render('error', { title: 'Not found', message: "That page doesn't exist." });

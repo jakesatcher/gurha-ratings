@@ -19,10 +19,19 @@ function csrfValid(req) {
 // Routes that accept multipart uploads; they call `verifyCsrf` after multer parses the body.
 const MULTIPART_ROUTES = [/^\/admin\/import$/, /^\/admin\/import\/sportsengine$/, /^\/admin\/paper\/forms\/\d+\/enter$/];
 
+// Public pages that anyone can browse without signing in. They have no forms, so they don't start a
+// session (which would store a row for every anonymous visitor and bot).
+const SESSIONLESS_PAGES = [/^\/$/, /^\/player\/\d+$/];
+
 // Global CSRF check.
 function csrf(req, res, next) {
+  const reading = ['GET', 'HEAD', 'OPTIONS'].includes(req.method);
+  if (reading && !req.session.csrfToken && SESSIONLESS_PAGES.some((re) => re.test(req.path))) {
+    res.locals.csrfToken = '';
+    return next();
+  }
   res.locals.csrfToken = ensureCsrfToken(req);
-  if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
+  if (reading) return next();
   if (MULTIPART_ROUTES.some((re) => re.test(req.path)) && req.is('multipart/form-data')) return next();
   if (csrfValid(req)) return next();
   return res.status(403).render('error', { title: 'Session expired', message: 'Your form session expired. Please go back, refresh the page and try again.' });

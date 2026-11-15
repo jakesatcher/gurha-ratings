@@ -111,22 +111,27 @@ async function log(entry) {
 
 // Sends one message. Throws MailError if it couldn't be sent (after retries); callers decide
 // whether that's fatal (sign-in codes) or just logged (admin notifications).
-async function send({ to, subject, text, html, kind = 'other', userId = null, idempotencyKey = null }) {
-  const msg = { from: config.mail.from, replyTo: config.mail.replyTo, to, subject, text, html, kind };
+// A Reply-To taken from user input must be one plain address: no line breaks, commas or display names
+// that could inject extra headers or recipients.
+const SAFE_ADDRESS = /^[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]{1,190}\.[A-Za-z]{2,24}$/;
+
+async function send({ to, subject, text, html, kind = 'other', userId = null, idempotencyKey = null, replyTo = null }) {
+  const safeReplyTo = replyTo && SAFE_ADDRESS.test(replyTo) ? replyTo : config.mail.replyTo;
+  const msg = { from: config.mail.from, replyTo: safeReplyTo, to, subject: String(subject).replace(/[\r\n]+/g, ' '), text, html, kind };
   const via = provider();
   try {
     let providerId = null;
     if (via === 'resend') {
       providerId = await sendViaResend(msg, idempotencyKey || crypto.randomUUID());
     } else if (via === 'smtp') {
-      const info = await transport.sendMail({ from: msg.from, replyTo: msg.replyTo || undefined, to, subject, text, html });
+      const info = await transport.sendMail({ from: msg.from, replyTo: msg.replyTo || undefined, to, subject: msg.subject, text, html });
       providerId = info && info.messageId;
     } else {
       outbox.push(msg);
       if (outbox.length > 100) outbox.shift();
       if (process.env.NODE_ENV !== 'test') console.log(`[mail:console] To: ${to} | ${subject}\n${text}\n`);
     }
-    await log({ to, kind, subject, status: via === 'console' ? 'console' : 'sent', provider: via, providerId, userId });
+    await log({ to, kind, subject: msg.subject, status: via === 'console' ? 'console' : 'sent', provider: via, providerId, userId });
     return { provider: via, id: providerId };
   } catch (err) {
     await log({ to, kind, subject, status: 'failed', provider: via, error: err.message, userId });
@@ -153,4 +158,4 @@ function configWarnings() {
   return warnings;
 }
 
-module.exports = { send, sendQuietly, escapeHtml, outbox, isConfigured, provider, configWarnings, redact, MailError };
+module.exports = { SAFE_ADDRESS, send, sendQuietly, escapeHtml, outbox, isConfigured, provider, configWarnings, redact, MailError };

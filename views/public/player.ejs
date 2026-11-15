@@ -1,0 +1,14 @@
+<%- include('../partials/head') %>
+<p class="crumbs"><a href="/">← Search players</a></p>
+<section class="card public-player">
+  <h1><%= player.first_name %> <%= player.last_name %></h1>
+  <p class="muted"><%= publicSeason.name %></p>
+  <dl class="dl">
+    <dt>Teams</dt>
+    <dd><% if (player.teams.length) { %><ul class="plain-list"><% player.teams.forEach(function (t) { %><li><%= t.team %><%= t.jersey ? ` #${t.jersey}` : '' %><%= t.sub ? ' (sub)' : '' %></li><% }) %></ul><% } else { %>No team<% } %></dd>
+    <dt>Rating</dt>
+    <dd><%- include('_rating', { r: player.rating }) %></dd>
+  </dl>
+  <a class="btn btn-primary" href="/player/<%= player.id %>/contest">Contest rating</a>
+</section>
+<%- include('../partials/foot') %>

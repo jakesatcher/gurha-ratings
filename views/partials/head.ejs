@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#0b1f3a">
+  <meta name="robots" content="noindex, nofollow">
   <title><%= title ? `${title} · ${appName}` : appName %></title>
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
   <link rel="preload" href="/static/fonts/oswald-latin-700-normal.woff2" as="font" type="font/woff2" crossorigin>
@@ -28,6 +29,11 @@
         <input type="hidden" name="_csrf" value="<%= csrfToken %>">
         <button type="submit" class="linklike">Sign out</button>
       </form>
+    </nav>
+    <% } else { %>
+    <nav class="nav" aria-label="Main">
+      <a href="/" class="<%= path === '/' || path.startsWith('/player/') ? 'active' : '' %>">Player ratings</a>
+      <a href="/login" class="<%= path === '/login' ? 'active' : '' %>">Sign in</a>
     </nav>
     <% } %>
   </div>

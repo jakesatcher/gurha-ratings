@@ -19,4 +19,7 @@ module.exports = {
   mfaLimiter: limiter(20, 15),
   registerLimiter: limiter(10, 60),
   resetLimiter: limiter(10, 60),
+  // Public player search and rating-contest submissions.
+  searchLimiter: limiter(120, 5),
+  contestLimiter: limiter(5, 60),
 };

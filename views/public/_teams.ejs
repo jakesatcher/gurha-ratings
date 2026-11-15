@@ -1,0 +1,1 @@
+<% if (teams.length) { %><%= teams.map(function (t) { return t.team + (t.jersey ? ' #' + t.jersey : '') + (t.sub ? ' (sub)' : ''); }).join(' · ') %><% } else { %>No team<% } %>

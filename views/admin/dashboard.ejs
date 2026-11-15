@@ -4,6 +4,7 @@
 <p class="muted small">Showing <strong><%= season ? season.name : 'no season' %></strong>. <a href="/admin/seasons">Manage seasons</a></p>
 <div class="stats">
   <a class="stat <%= stats.pending ? 'stat-alert' : '' %>" href="/admin/users"><span class="stat-num"><%= stats.pending %></span><span>Pending requests</span></a>
+  <a class="stat <%= stats.contests ? 'stat-alert' : '' %>" href="/admin/contests"><span class="stat-num"><%= stats.contests %></span><span>Open contests</span></a>
   <a class="stat" href="/admin/users"><span class="stat-num"><%= stats.users %></span><span>Active users</span></a>
   <a class="stat" href="/players"><span class="stat-num"><%= stats.players %></span><span>Active players</span></a>
   <a class="stat" href="/players?status=none"><span class="stat-num"><%= stats.unrated %></span><span>Players with no ratings</span></a>

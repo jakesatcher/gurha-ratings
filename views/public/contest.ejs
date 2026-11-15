@@ -1,0 +1,26 @@
+<%- include('../partials/head') %>
+<p class="crumbs"><a href="/player/<%= player.id %>">← <%= player.first_name %> <%= player.last_name %></a></p>
+<section class="card">
+  <h1>Contest a rating</h1>
+  <p><strong><%= player.first_name %> <%= player.last_name %></strong> · <%- include('_teams', { teams: player.teams }) %> · <%- include('_rating', { r: player.rating }) %></p>
+  <p class="muted small">Tell the GURHA admins why you think this rating should change. They'll review it and may reply by email. Your email is only shared with the admins.</p>
+  <%- include('../partials/errors') %>
+  <form method="post" action="/player/<%= player.id %>/contest" class="stack" novalidate>
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <div class="hp-field" aria-hidden="true"><label>Website <input name="website" tabindex="-1" autocomplete="off"></label></div>
+    <div class="grid-2">
+      <label>Your name <input name="name" maxlength="100" required autocomplete="name" value="<%= values.name || '' %>"></label>
+      <label>Your email <input name="email" type="email" maxlength="200" required autocomplete="email" value="<%= values.email || '' %>"></label>
+    </div>
+    <label>You are
+      <select name="relationship">
+        <option value="">Choose…</option>
+        <% relationships.forEach(function (r) { %><option <%= values.relationship === r ? 'selected' : '' %>><%= r %></option><% }) %>
+      </select>
+    </label>
+    <label>Why should the rating change? <small class="muted">(20–2000 characters)</small>
+      <textarea name="message" rows="6" minlength="20" maxlength="2000" required><%= values.message || '' %></textarea></label>
+    <button class="btn btn-primary" type="submit">Send to admins</button>
+  </form>
+</section>
+<%- include('../partials/foot') %>

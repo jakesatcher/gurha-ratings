@@ -15,7 +15,7 @@
     <h2>Email alerts</h2>
     <form method="post" action="/account/notifications" class="stack">
       <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-      <label class="check"><input type="checkbox" name="notify_access_requests" <%= currentUser.notify_access_requests ? 'checked' : '' %>> Email me when someone requests access</label>
+      <label class="check"><input type="checkbox" name="notify_access_requests" <%= currentUser.notify_access_requests ? 'checked' : '' %>> Email me when someone requests access or contests a rating</label>
       <button class="btn" type="submit">Save</button>
     </form>
   </section>

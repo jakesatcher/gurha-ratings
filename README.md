@@ -6,6 +6,12 @@ Approved raters search for players and score them using the official **GURHA Pla
 
 ## Features
 
+### Public player lookup (no sign-in)
+
+- The home page (`/`) is a public **name search** for the current season. Results and each public player page (`/player/<id>`) show **only** the player's name, teams, jersey numbers and rating (level and average points). No rating counts, raters, comments, scale, dates of birth, emails or notes. Inactive players and rater-added placeholders aren't listed. Signed-in users still go straight to the full app.
+- Each public player page has a **Contest rating** button. The form takes the person's name, email, relationship to the player and their reasoning; it's saved under **Admin → Contests** (with an open count on the dashboard) and emailed to admins who have alerts turned on, with Reply-To set to the person's address so admins can answer directly. Admins mark each contest resolved with an optional note.
+- Safety: all queries are parameterized (search text never becomes SQL) and `%`/`_` in search text are matched literally; everything shown is HTML-escaped (pages and emails); the contest form has a CSRF token, a hidden honeypot field, length limits, control/invisible-character stripping, a strict single-address email check (blocks header injection), and rejects script/HTML tags; search and contest submissions are rate-limited per IP. Public browsing doesn't create a session, and pages carry `noindex` so search engines don't list player names.
+
 **Roles**
 
 | Role | Can do |

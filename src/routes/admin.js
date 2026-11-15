@@ -44,6 +44,7 @@ router.get('/', async (req, res) => {
   const stats = await db.one(
     `SELECT
       (SELECT count(*) FROM users WHERE status = 'pending')::int AS pending,
+      (SELECT count(*) FROM rating_contests WHERE status = 'open')::int AS contests,
       (SELECT count(*) FROM users WHERE status = 'approved' AND can_login)::int AS users,
       (SELECT count(*) FROM season_players sp JOIN players p ON p.id = sp.player_id WHERE sp.season_id = $1 AND p.active)::int AS players,
       (SELECT count(*) FROM ratings WHERE season_id = $1)::int AS ratings,
@@ -390,6 +391,39 @@ router.post('/players/:id/delete', async (req, res) => {
     req.flash('success', `${player.first_name} ${player.last_name} and all of their ratings were deleted.`);
   }
   res.redirect('/admin/players');
+});
+
+// ---------- Rating contests from the public ----------
+
+router.get('/contests', async (req, res) => {
+  const show = req.query.show === 'all' ? 'all' : 'open';
+  const contests = await db.many(
+    `SELECT c.*, p.first_name, p.last_name, s.name AS season_name, u.name AS resolved_by_name
+       FROM rating_contests c
+       JOIN players p ON p.id = c.player_id
+       LEFT JOIN seasons s ON s.id = c.season_id
+       LEFT JOIN users u ON u.id = c.resolved_by
+      ${show === 'open' ? "WHERE c.status = 'open'" : ''}
+      ORDER BY (c.status = 'open') DESC, c.created_at DESC
+      LIMIT 200`
+  );
+  const { n: openCount } = await db.one(`SELECT count(*)::int AS n FROM rating_contests WHERE status = 'open'`);
+  res.render('admin/contests', { title: 'Rating contests', contests, show, openCount });
+});
+
+router.post('/contests/:id', async (req, res) => {
+  const contest = await db.one('SELECT * FROM rating_contests WHERE id = $1', [id(req)]);
+  if (!contest) return res.redirect('/admin/contests');
+  const resolve = req.body.action !== 'reopen';
+  const note = String(req.body.admin_note || '').trim().slice(0, 2000) || null;
+  if (resolve) {
+    await db.query(`UPDATE rating_contests SET status = 'resolved', admin_note = $1, resolved_by = $2, resolved_at = now() WHERE id = $3`, [note, req.user.id, contest.id]);
+  } else {
+    await db.query(`UPDATE rating_contests SET status = 'open', resolved_by = NULL, resolved_at = NULL WHERE id = $1`, [contest.id]);
+  }
+  await audit(req.user.id, resolve ? 'rating_contest_resolved' : 'rating_contest_reopened', 'player', contest.player_id, { contest_id: contest.id, note });
+  req.flash('success', resolve ? 'Contest marked resolved.' : 'Contest reopened.');
+  res.redirect('/admin/contests');
 });
 
 // Allowed points for teams in a league this season (blank clears it).

@@ -1,0 +1,36 @@
+<%- include('../partials/head') %>
+<h1>Rating contests</h1>
+<%- include('_nav') %>
+<p class="muted">Requests from the public page to review a player's rating. Reply to the person by email (the alert email's Reply-To is their address).</p>
+<p class="actions">
+  <a class="btn btn-small <%= show === 'open' ? 'btn-primary' : '' %>" href="/admin/contests">Open (<%= openCount %>)</a>
+  <a class="btn btn-small <%= show === 'all' ? 'btn-primary' : '' %>" href="/admin/contests?show=all">All</a>
+</p>
+<% if (!contests.length) { %><div class="card"><p class="muted"><%= show === 'open' ? 'No open contests.' : 'No contests yet.' %></p></div><% } %>
+<% contests.forEach(function (c) { %>
+  <section class="card contest">
+    <div class="page-head">
+      <h2><a href="/players/<%= c.player_id %>"><%= c.first_name %> <%= c.last_name %></a></h2>
+      <span class="tag <%= c.status === 'open' ? 'tag-pending' : 'tag-approved' %>"><%= c.status %></span>
+    </div>
+    <p class="small muted"><%= fmtDate(c.created_at) %><%= c.season_name ? ` · ${c.season_name}` : '' %> · from <strong><%= c.name %></strong> &lt;<a href="mailto:<%= c.email %>"><%= c.email %></a>&gt;<%= c.relationship ? ` · ${c.relationship}` : '' %></p>
+    <blockquote class="contest-message"><%= c.message %></blockquote>
+    <% if (c.status === 'resolved') { %>
+      <p class="small">Resolved<%= c.resolved_by_name ? ` by ${c.resolved_by_name}` : '' %> on <%= fmtDate(c.resolved_at) %><%= c.admin_note ? ':' : '.' %></p>
+      <% if (c.admin_note) { %><p class="pre small"><%= c.admin_note %></p><% } %>
+      <form method="post" action="/admin/contests/<%= c.id %>" class="inline">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <input type="hidden" name="action" value="reopen">
+        <button class="btn btn-small" type="submit">Reopen</button>
+      </form>
+    <% } else { %>
+      <form method="post" action="/admin/contests/<%= c.id %>" class="inline-form">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <input type="hidden" name="action" value="resolve">
+        <input name="admin_note" maxlength="2000" placeholder="What was decided (optional, admins only)" aria-label="Resolution note">
+        <button class="btn btn-small" type="submit">Mark resolved</button>
+      </form>
+    <% } %>
+  </section>
+<% }) %>
+<%- include('../partials/foot') %>
