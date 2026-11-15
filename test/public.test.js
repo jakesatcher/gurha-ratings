@@ -57,6 +57,8 @@ test('search shows only name, teams, jersey numbers and rating', async () => {
   const res = await h.request(app).get('/?q=gretz');
   assert.strictEqual(res.status, 200);
   assert.match(res.text, /Gretzky, Wayne/);
+  assert.match(res.text, /name="q" type="search" value=""/, 'search box is cleared after each search');
+  assert.match(res.text, /Results for “gretz”/);
   assert.match(res.text, /Oilers #99 · Penguins #19 \(sub\)/);
   assert.match(res.text, /level-ba">B1\/A2<\/span>\s*<strong>13\.00<\/strong>/);
   for (const leak of [/PRIVATE COMMENT/, /secret admin note/, /private\.test/, /1980/, /Age \d/, /\b1 rating\b|ratings?\)/i, /Rater/, /Low|Medium|High|0–15/, /Ice Dogs/]) {

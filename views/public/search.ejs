@@ -4,7 +4,7 @@
   <p class="muted"><%= publicSeason ? publicSeason.name : 'No season yet' %></p>
   <form method="get" action="/" role="search" class="public-search">
     <label for="q" class="sr-hidden">Player name</label>
-    <input id="q" name="q" type="search" value="<%= q %>" maxlength="60" placeholder="Search by player name" autocomplete="off" autofocus>
+    <input id="q" name="q" type="search" value="" maxlength="60" placeholder="Search by player name" autocomplete="off" autofocus>
     <button class="btn btn-primary" type="submit">Search</button>
   </form>
 </section>
@@ -15,6 +15,7 @@
   <% if (!results.length) { %>
     <div class="card"><p>No players found for “<%= q %>”.</p></div>
   <% } else { %>
+    <p class="small muted">Results for “<%= q %>”</p>
     <ul class="player-list public-list">
       <% results.forEach(function (p) { %>
         <li class="player-row">
