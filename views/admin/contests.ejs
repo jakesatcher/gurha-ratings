@@ -14,6 +14,7 @@
       <span class="tag <%= c.status === 'open' ? 'tag-pending' : 'tag-approved' %>"><%= c.status %></span>
     </div>
     <p class="small muted"><%= fmtDate(c.created_at) %><%= c.season_name ? ` · ${c.season_name}` : '' %> · from <strong><%= c.name %></strong> &lt;<a href="mailto:<%= c.email %>"><%= c.email %></a>&gt;<%= c.relationship ? ` · ${c.relationship}` : '' %></p>
+    <% if (c.requested_level) { %><p>Thinks the rating should be <%- include('../partials/level', { level: c.requested_level }) %></p><% } %>
     <blockquote class="contest-message"><%= c.message %></blockquote>
     <% if (c.status === 'resolved') { %>
       <p class="small">Resolved<%= c.resolved_by_name ? ` by ${c.resolved_by_name}` : '' %> on <%= fmtDate(c.resolved_at) %><%= c.admin_note ? ':' : '.' %></p>

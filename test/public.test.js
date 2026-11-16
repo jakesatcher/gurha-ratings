@@ -112,7 +112,7 @@ test('contest form: CSRF, validation, header/HTML injection, honeypot, then the 
   assert.strictEqual(form.status, 200);
   const csrf = h.csrfFrom(form.text);
   const send = (data) => visitor.post(url).type('form').send({ _csrf: csrf, ...data });
-  const good = { name: 'Pat Parent', email: 'pat@example.com', relationship: 'I am this player', message: "I've moved down a league and haven't played in two years." };
+  const good = { name: 'Pat Parent', email: 'pat@example.com', relationship: 'I am this player', requested_level: 'C1/B2', message: "I've moved down a league and haven't played in two years." };
   const count = async () => (await h.db.one('SELECT count(*)::int AS n FROM rating_contests')).n;
 
   // No CSRF token
@@ -120,7 +120,10 @@ test('contest form: CSRF, validation, header/HTML injection, honeypot, then the 
   // Missing fields
   const empty = await send({ name: '', email: '', message: 'short' });
   assert.strictEqual(empty.status, 422);
-  assert.match(empty.text, /Enter your name[\s\S]*valid email[\s\S]*at least 20 characters/);
+  assert.match(empty.text, /Enter your name[\s\S]*valid email[\s\S]*Choose the rating you think[\s\S]*at least 20 characters/);
+  assert.match(form.text, /name="requested_level"[\s\S]*<option value="D1\/C2"/);
+  // Only real levels are accepted
+  assert.match((await send({ ...good, requested_level: "A' OR 1=1" })).text, /Choose the rating you think/);
   // Email header injection
   const hdr = await send({ ...good, email: 'pat@example.com\r\nBcc: victim@example.com' });
   assert.strictEqual(hdr.status, 422);
@@ -141,7 +144,7 @@ test('contest form: CSRF, validation, header/HTML injection, honeypot, then the 
   assert.strictEqual(ok.headers.location, `/player/${ids.Gretzky}`);
   assert.match((await visitor.get(ok.headers.location)).text, /sent to the GURHA admins/);
   const row = await h.db.one('SELECT * FROM rating_contests');
-  assert.deepStrictEqual([row.player_id, row.name, row.email, row.relationship, row.status], [ids.Gretzky, 'Pat Parent', 'pat@example.com', 'I am this player', 'open']);
+  assert.deepStrictEqual([row.player_id, row.name, row.email, row.relationship, row.requested_level, row.status], [ids.Gretzky, 'Pat Parent', 'pat@example.com', 'I am this player', 'C1/B2', 'open']);
   assert.match(row.message, /DROP TABLE ratings;-- <b>bold<\/b>/, 'stored as plain text');
   assert.ok(await h.db.one('SELECT count(*) FROM ratings'), 'ratings table untouched');
 
@@ -150,11 +153,13 @@ test('contest form: CSRF, validation, header/HTML injection, honeypot, then the 
   assert.strictEqual(mail.to, 'pub-admin@test.com');
   assert.strictEqual(mail.replyTo, 'pat@example.com');
   assert.match(mail.html, /&lt;b&gt;bold&lt;\/b&gt;/);
+  assert.match(mail.text, /Current rating: B1\/A2\. Thinks it should be: C1\/B2\./);
   assert.doesNotMatch(mail.html, /<b>bold<\/b>/);
 
   // Admin reviews it: content escaped, then resolved
   const page = await admin.get('/admin/contests');
   assert.match(page.text, /Wayne Gretzky/);
+  assert.match(page.text, /Thinks the rating should be <span class="level level-cb">C1\/B2/);
   assert.match(page.text, /&lt;b&gt;bold&lt;\/b&gt;/);
   assert.doesNotMatch(page.text, /<b>bold<\/b>/);
   await h.post(admin, `/admin/contests/${row.id}`, { action: 'resolve', admin_note: 'Rating stays; reviewed game footage.' }, '/admin/contests');

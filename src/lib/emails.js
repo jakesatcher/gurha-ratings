@@ -120,16 +120,18 @@ function accessRejected({ name }) {
 
 // ---------- Rating contests ----------
 
-function ratingContest({ playerName, teams, name, email, relationship, message, reviewUrl, openCount }) {
+function ratingContest({ playerName, teams, name, email, relationship, currentLevel, requestedLevel, message, reviewUrl, openCount }) {
+  const levels = `Current rating: ${currentLevel || 'not rated yet'}. Thinks it should be: ${requestedLevel}.`;
   return {
     kind: 'rating_contest',
     subject: `Rating contest: ${playerName}`,
-    text: `${name} (${email})${relationship ? `, ${relationship},` : ''} is contesting ${playerName}'s rating${teams ? ` (${teams})` : ''}.\n\n"${message}"\n\n${openCount} open contest(s). Review: ${reviewUrl}\nReply to this email to answer ${name}.`,
+    text: `${name} (${email})${relationship ? `, ${relationship},` : ''} is contesting ${playerName}'s rating${teams ? ` (${teams})` : ''}.\n${levels}\n\n"${message}"\n\n${openCount} open contest(s). Review: ${reviewUrl}\nReply to this email to answer ${name}.`,
     html: layout({
       preheader: `${name} is contesting ${playerName}'s rating.`,
       heading: 'Rating contested',
       body:
         p(`<strong>${esc(name)}</strong> (${esc(email)})${relationship ? `, ${esc(relationship)},` : ''} is contesting <strong>${esc(playerName)}</strong>'s rating${teams ? ` (${esc(teams)})` : ''}.`) +
+        p(`Current rating: <strong>${esc(currentLevel || 'not rated yet')}</strong> · Thinks it should be: <strong>${esc(requestedLevel)}</strong>`) +
         `<blockquote style="margin:0 0 14px;padding:10px 14px;background:#f1f5f9;border-left:4px solid ${NAVY};border-radius:6px;white-space:pre-wrap">${esc(message)}</blockquote>` +
         p(`${openCount} open contest${openCount === 1 ? '' : 's'}. Reply to this email to answer ${esc(name)}.`) +
         button(reviewUrl, 'Review contests'),

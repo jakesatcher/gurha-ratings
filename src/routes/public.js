@@ -15,6 +15,7 @@ const mailer = require('../lib/mailer');
 const emails = require('../lib/emails');
 const { audit } = require('../lib/audit');
 const { searchLimiter, contestLimiter } = require('../lib/limits');
+const { LEVELS } = require('../lib/levels');
 
 const router = express.Router();
 
@@ -100,7 +101,7 @@ router.get('/player/:id', searchLimiter, async (req, res) => {
 router.get('/player/:id/contest', searchLimiter, async (req, res) => {
   const found = await publicPlayer(req, res);
   if (!found) return;
-  res.render('public/contest', { title: 'Contest a rating', publicSeason: found.season, player: found.player, values: {}, errors: [], relationships: RELATIONSHIPS });
+  res.render('public/contest', { title: 'Contest a rating', publicSeason: found.season, player: found.player, values: {}, errors: [], relationships: RELATIONSHIPS, levelChoices: LEVELS });
 });
 
 router.post('/player/:id/contest', contestLimiter, async (req, res) => {
@@ -111,6 +112,7 @@ router.post('/player/:id/contest', contestLimiter, async (req, res) => {
     name: cleanText(req.body.name, 100),
     email: cleanText(req.body.email, 200).toLowerCase(),
     relationship: RELATIONSHIPS.includes(req.body.relationship) ? req.body.relationship : '',
+    requested_level: LEVELS.includes(req.body.requested_level) ? req.body.requested_level : '',
     message: cleanText(req.body.message, 2000, { multiline: true }),
   };
   // Honeypot: a hidden field people never see. Bots that fill it get a normal-looking thank-you.
@@ -121,16 +123,17 @@ router.post('/player/:id/contest', contestLimiter, async (req, res) => {
   const errors = [];
   if (values.name.length < 2) errors.push('Enter your name.');
   if (!mailer.SAFE_ADDRESS.test(values.email)) errors.push('Enter a valid email address so an admin can reply.');
-  if (values.message.length < 20) errors.push('Explain why the rating should change (at least 20 characters).');
+  if (!values.requested_level) errors.push('Choose the rating you think the player should have.');
+  if (values.message.length < 20) errors.push('Explain why the current rating is inaccurate (at least 20 characters).');
   if (/<\s*\/?\s*(script|iframe|object|embed|style|link|meta|svg)\b|javascript:/i.test(`${values.name} ${values.message}`)) {
     errors.push('Please remove the HTML or code from your message.');
   }
   if (errors.length) {
-    return res.status(422).render('public/contest', { title: 'Contest a rating', publicSeason: season, player, values, errors, relationships: RELATIONSHIPS });
+    return res.status(422).render('public/contest', { title: 'Contest a rating', publicSeason: season, player, values, errors, relationships: RELATIONSHIPS, levelChoices: LEVELS });
   }
   const contest = await db.one(
-    `INSERT INTO rating_contests (player_id, season_id, name, email, relationship, message) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-    [player.id, season.id, values.name, values.email, values.relationship || null, values.message]
+    `INSERT INTO rating_contests (player_id, season_id, name, email, relationship, requested_level, message) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+    [player.id, season.id, values.name, values.email, values.relationship || null, values.requested_level, values.message]
   );
   await audit(null, 'rating_contested', 'player', player.id, { contest_id: contest.id, season_id: season.id, from: values.name });
 
@@ -147,6 +150,8 @@ router.post('/player/:id/contest', contestLimiter, async (req, res) => {
         name: values.name,
         email: values.email,
         relationship: values.relationship,
+        currentLevel: player.rating ? player.rating.level : null,
+        requestedLevel: values.requested_level,
         message: values.message,
         reviewUrl: `${config.appUrl}/admin/contests`,
         openCount,

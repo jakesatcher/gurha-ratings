@@ -3,7 +3,7 @@
 <section class="card">
   <h1>Contest a rating</h1>
   <p><strong><%= player.first_name %> <%= player.last_name %></strong> · <%- include('_teams', { teams: player.teams }) %> · <%- include('_rating', { r: player.rating }) %></p>
-  <p class="muted small">Tell the GURHA admins why you think this rating should change. They'll review it and may reply by email. Your email is only shared with the admins.</p>
+  <p class="muted small">Tell the GURHA admins what rating you think is right and why the current one is inaccurate. They'll review it and may reply by email. Your email is only shared with the admins.</p>
   <%- include('../partials/errors') %>
   <form method="post" action="/player/<%= player.id %>/contest" class="stack" novalidate>
     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
@@ -18,7 +18,13 @@
         <% relationships.forEach(function (r) { %><option <%= values.relationship === r ? 'selected' : '' %>><%= r %></option><% }) %>
       </select>
     </label>
-    <label>Why should the rating change? <small class="muted">(20–2000 characters)</small>
+    <label>What rating do you think <%= player.first_name %> should be?
+      <select name="requested_level" required>
+        <option value="">Choose a rating…</option>
+        <% levelChoices.forEach(function (l) { %><option value="<%= l %>" <%= values.requested_level === l ? 'selected' : '' %>><%= l === 'BEG' ? 'BEG (Beginner)' : l %></option><% }) %>
+      </select>
+    </label>
+    <label>Why is the current rating inaccurate? <small class="muted">(20–2000 characters)</small>
       <textarea name="message" rows="6" minlength="20" maxlength="2000" required><%= values.message || '' %></textarea></label>
     <button class="btn btn-primary" type="submit">Send to admins</button>
   </form>
