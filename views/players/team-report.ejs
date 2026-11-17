@@ -32,7 +32,7 @@
     <thead><tr><th>#</th><th>Jersey</th><th>Player name</th><th class="num">Final rating 0–<%= levels.MAX_POINTS %></th><th>GURHA level</th><th class="num">Raters</th></tr></thead>
     <tbody>
       <% players.forEach(function (p, i) { const s = summaries.get(p.id); %>
-        <tr>
+        <tr id="player-<%= p.id %>">
           <td><%= i + 1 %></td>
           <td><%= p.team_jersey || '' %></td>
           <td><a href="/players/<%= p.id %>"><%= p.first_name %> <%= p.last_name %></a><% if (p.added_by) { %> <span class="tag tag-pending" title="<%= p.added_note || '' %>">Added</span><% } else if (p.team_is_sub) { %> <span class="tag">Sub</span><% } %><% if (s.needsReview) { %> <span class="tag tag-warn">3rd review</span><% } %></td>

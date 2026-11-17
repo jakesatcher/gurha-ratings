@@ -40,6 +40,7 @@
       data-bounds='<%= JSON.stringify(levels.BOUNDS.map(b => ({ level: b.level, tier: b.tier, upper: b.upper === Infinity ? null : b.upper }))) %>'>
   <input type="hidden" name="_csrf" value="<%= csrfToken %>">
   <% if (!isEdit) { %><input type="hidden" name="season_id" value="<%= season.id %>"><% } %>
+  <% if (!isEdit && backToRoster) { %><input type="hidden" name="back" value="<%= backToRoster %>"><% } %>
   <% if (isEdit && rating.legacy) { %>
     <div class="alert alert-info">This rating was made on the old 0–11 scale (old scores: <%= rating.scores.map(s => `${s.category_name} ${fmt(s.score, 0)}`).join(', ') %>). Saving re-rates it on the current scale so it counts toward averages again.</div>
   <% } else if (isEdit && rating.scores.some(s => s.category_active && !s.grade)) { %>

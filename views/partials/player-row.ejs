@@ -1,6 +1,6 @@
 <%# One player in a list. Locals: p (roster row), s (summary), rated (bool), and optionally jersey/isSub for a team view. %>
 <% const j = locals.jersey !== undefined ? locals.jersey : p.jersey_number; %>
-<li class="player-row">
+<li class="player-row" id="player-<%= p.id %>">
   <a class="player-link" href="/players/<%= p.id %>">
     <span class="jersey"><%= j ? '#' + j : '–' %></span>
     <span class="player-main">
@@ -22,6 +22,6 @@
   <% if (rated) { %>
     <span class="rated-mark" title="You rated this player">✓<span class="hide-sm"> Rated</span></span>
   <% } else if (currentUser.canRate && p.active && season.ratings_open) { %>
-    <a class="btn btn-small btn-primary" href="/players/<%= p.id %>/rate">Rate</a>
+    <a class="btn btn-small btn-primary" href="/players/<%= p.id %>/rate?back=<%= encodeURIComponent(url) %>">Rate</a>
   <% } %>
 </li>

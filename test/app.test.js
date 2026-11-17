@@ -757,7 +757,7 @@ test('raters add unlisted players to a team, rate them, and admins merge them in
   assert.strictEqual(added.status, 302);
   const p = await h.db.one(`SELECT * FROM players WHERE added_by IS NOT NULL AND last_name = '#12'`);
   assert.strictEqual(p.first_name, 'Unlisted');
-  assert.strictEqual(added.headers.location, `/players/${p.id}/rate`);
+  assert.strictEqual(added.headers.location, `/players/${p.id}/rate?back=${encodeURIComponent(`/teams/${team.id}`)}`);
   const spot = await h.db.one(`SELECT tr.jersey_number, tr.is_sub FROM team_rosters tr JOIN season_players sp ON sp.id = tr.season_player_id WHERE sp.player_id = $1`, [p.id]);
   assert.deepStrictEqual([spot.jersey_number, spot.is_sub], ['12', true]);
   assert.strictEqual((await h.post(rater, `/players/${p.id}/rate`, fullRating({ [S]: 'A' }))).status, 302);
@@ -766,7 +766,7 @@ test('raters add unlisted players to a team, rate them, and admins merge them in
   await h.createUser({ email: 'ul-rater2@test.com', name: 'UL Rater Two' });
   const rater2 = await h.login(app, 'ul-rater2@test.com');
   const again = await h.post(rater2, url, { number: '12', note: 'same guy' }, url);
-  assert.strictEqual(again.headers.location, `/players/${p.id}/rate`);
+  assert.strictEqual(again.headers.location, `/players/${p.id}/rate?back=${encodeURIComponent(`/teams/${team.id}`)}`);
   assert.strictEqual((await h.db.one(`SELECT count(*)::int AS n FROM players WHERE added_by IS NOT NULL AND last_name = '#12'`)).n, 1);
 
   // Name + number
@@ -889,4 +889,42 @@ test('Admin → Raters lists raters and the players each one rated', async () =>
   assert.strictEqual((await rater.get('/admin/raters')).status, 403);
   assert.strictEqual((await rater.get(`/admin/raters/${roryId}`)).status, 403);
   assert.strictEqual((await admin.get('/admin/raters/999999')).status, 404);
+});
+
+test('after rating, the rater goes back to the roster the player was opened from', async () => {
+  await h.createUser({ email: 'bk-admin@test.com', name: 'Bk Admin', role: 'admin' });
+  const admin = await h.login(app, 'bk-admin@test.com');
+  for (const f of ['Ann', 'Ben', 'Cat']) await h.post(admin, '/admin/players', { first_name: f, last_name: 'Backer', team: 'Back Team', division: 'BK' }, '/admin/players/new');
+  const team = await h.db.one(`SELECT id FROM teams WHERE name = 'Back Team'`);
+  const ids = Object.fromEntries((await h.db.many(`SELECT id, first_name FROM players WHERE last_name = 'Backer'`)).map((p) => [p.first_name, p.id]));
+  await h.createUser({ email: 'bk-rater@test.com', name: 'Bk Rater' });
+  const rater = await h.login(app, 'bk-rater@test.com');
+  const rate = async (pid, rateUrl) => {
+    const form = await rater.get(rateUrl);
+    const back = /name="back" value="([^"]*)"/.exec(form.text);
+    return rater.post(`/players/${pid}/rate`).type('form').send({ _csrf: h.csrfFrom(form.text), ...fullRating(), ...(back ? { back: back[1].replace(/&amp;/g, '&') } : {}) });
+  };
+
+  // Rate button on the team page → back to the team page
+  const teamPage = await rater.get(`/teams/${team.id}`);
+  const rateHref = new RegExp(`href="(/players/${ids.Ann}/rate\\?back=[^"]+)"`).exec(teamPage.text)[1].replace(/&amp;/g, '&');
+  assert.strictEqual((await rate(ids.Ann, rateHref)).headers.location, `/teams/${team.id}#player-${ids.Ann}`);
+
+  // From the filtered unrated list → back to that list with its filters
+  await rater.get('/players?status=none&team=' + team.id);
+  assert.strictEqual((await rate(ids.Ben, `/players/${ids.Ben}/rate`)).headers.location, `/players?status=none&team=${team.id}#player-${ids.Ben}`);
+
+  // Team page → player page → "Rate this player" → still back to the team page
+  await rater.get(`/teams/${team.id}`);
+  await rater.get(`/players/${ids.Cat}`);
+  assert.strictEqual((await rate(ids.Cat, `/players/${ids.Cat}/rate`)).headers.location, `/teams/${team.id}#player-${ids.Cat}`);
+
+  // Off-site or non-roster "back" values are ignored (no open redirect)
+  await h.post(admin, '/admin/players', { first_name: 'Dee', last_name: 'Backer', team: 'Back Team', division: 'BK' }, '/admin/players/new');
+  const dee = await h.db.one(`SELECT id FROM players WHERE first_name = 'Dee' AND last_name = 'Backer'`);
+  const fresh = await h.login(app, 'bk-admin@test.com');
+  const f2 = await fresh.get(`/players/${dee.id}/rate?back=//evil.example/teams/1`);
+  assert.doesNotMatch(f2.text, /name="back" value="[^"]*evil/);
+  const out = await fresh.post(`/players/${dee.id}/rate`).type('form').send({ _csrf: h.csrfFrom(f2.text), ...fullRating(), back: 'https://evil.example/' });
+  assert.doesNotMatch(out.headers.location, /evil/);
 });

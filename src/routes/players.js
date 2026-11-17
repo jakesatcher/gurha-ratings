@@ -14,6 +14,26 @@ const { nameKey } = require('../lib/identity');
 
 const router = express.Router();
 
+// ---------- Where to go after rating: back to the roster the player was opened from ----------
+
+// Pages that list players to rate. Viewing one remembers it, so rating a player opened from it
+// (directly or via the player's page) comes back to the same list, filters included.
+const ROSTER_PAGES = [/^\/teams\/\d+$/, /^\/leagues\/[^/]+$/, /^\/players$/, /^\/reports\/teams$/, /^\/reports\/leagues\/[^/]+$/];
+
+// Only same-site paths to a roster page are allowed (no open redirects).
+function safeRosterUrl(v) {
+  const s = String(v || '');
+  if (!s.startsWith('/') || s.startsWith('//') || s.includes('\\') || s.length > 500 || /[\r\n]/.test(s)) return null;
+  const path = s.split(/[?#]/)[0];
+  return ROSTER_PAGES.some((re) => re.test(path)) ? s : null;
+}
+
+router.use((req, res, next) => {
+  if (req.method === 'GET' && req.user && ROSTER_PAGES.some((re) => re.test(req.path))) req.session.rosterUrl = req.originalUrl;
+  res.locals.backToRoster = safeRosterUrl(req.query.back) || safeRosterUrl(req.body && req.body.back) || safeRosterUrl(req.session && req.session.rosterUrl);
+  next();
+});
+
 function canSeeRaterNames(user) {
   return user.role === 'admin' || config.showRaterNamesToRaters;
 }
@@ -182,7 +202,7 @@ router.post('/teams/:id/add-player', requireRater, async (req, res) => {
   );
   if (existing) {
     req.flash('info', `${v.first} ${v.last} was already added to ${team.name}. Rate them here.`);
-    return res.redirect(`/players/${existing.id}/rate`);
+    return res.redirect(`/players/${existing.id}/rate?back=${encodeURIComponent(`/teams/${team.id}`)}`);
   }
   const player = await db.tx(async (c) => {
     const { rows } = await c.query(
@@ -198,7 +218,7 @@ router.post('/teams/:id/add-player', requireRater, async (req, res) => {
   });
   req.session.seasonId = team.season_id;
   req.flash('success', `Added ${v.first} ${v.last} to ${team.name}.`);
-  res.redirect(`/players/${player.id}/rate`);
+  res.redirect(`/players/${player.id}/rate?back=${encodeURIComponent(`/teams/${team.id}`)}`);
 });
 
 // ---------- Search / filtered list ----------
@@ -323,7 +343,8 @@ router.post('/players/:id/rate', requireRater, async (req, res) => {
       return id;
     });
     req.flash('success', `Rating submitted for ${player.first_name} ${player.last_name}. Thank you!`);
-    res.redirect(`/players/${player.id}#rating-${ratingId}`);
+    const back = safeRosterUrl(req.body.back) || safeRosterUrl(req.session.rosterUrl);
+    res.redirect(back ? `${back.split('#')[0]}#player-${player.id}` : `/players/${player.id}#rating-${ratingId}`);
   } catch (err) {
     // Unique (season, player, rater) violation: a concurrent duplicate submission.
     if (err.code === '23505') return renderAlreadyRated(res, player);
