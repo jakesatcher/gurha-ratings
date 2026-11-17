@@ -855,3 +855,38 @@ test('Players tab: "All unrated players" lists everyone with no ratings yet', as
     assert.match(list.text, /players? with no ratings yet in/);
   }
 });
+
+test('Admin → Raters lists raters and the players each one rated', async () => {
+  await h.createUser({ email: 'rv-admin@test.com', name: 'RV Admin', role: 'admin' });
+  const admin = await h.login(app, 'rv-admin@test.com');
+  await h.createUser({ email: 'rv-rater@test.com', name: 'Rory Rater' });
+  const rater = await h.login(app, 'rv-rater@test.com');
+  const roryId = (await h.db.one(`SELECT id FROM users WHERE email = 'rv-rater@test.com'`)).id;
+  for (const [f, l, j] of [['Alpha', 'Rv', '3'], ['Bravo', 'Rv', '8'], ['Charlie', 'Rvx', '11']]) {
+    await h.post(admin, '/admin/players', { first_name: f, last_name: l, team: 'RV Team', division: 'RV', jersey_number: j }, '/admin/players/new');
+  }
+  const ids = Object.fromEntries((await h.db.many(`SELECT id, first_name FROM players WHERE last_name IN ('Rv', 'Rvx')`)).map((p) => [p.first_name, p.id]));
+  await h.post(rater, `/players/${ids.Alpha}/rate`, fullRating({ [S]: 'D2:H', evidence: 'Quick feet' }));
+  await h.post(rater, `/players/${ids.Bravo}/rate`, fullRating({ [S]: 'B1/A2:L' }));
+  const bravoRating = await h.db.one('SELECT id FROM ratings WHERE player_id = $1', [ids.Bravo]);
+  await h.post(admin, `/admin/ratings/${bravoRating.id}/disqualify`, { reason: 'Way off' }, `/players/${ids.Bravo}`);
+
+  const list = await admin.get('/admin/raters');
+  assert.strictEqual(list.status, 200);
+  assert.match(list.text, new RegExp(`href="/admin/raters/${roryId}[^"]*"><strong>Rory Rater`));
+  assert.match(list.text, /Rory Rater[\s\S]*?<td class="num">2[\s\S]*?<td class="num">1</);
+
+  const detail = await admin.get(`/admin/raters/${roryId}`);
+  assert.match(detail.text, /Rory Rater/);
+  assert.match(detail.text, /2 players rated/);
+  assert.match(detail.text, /Rv, Alpha[\s\S]*RV Team #3[\s\S]*D2<\/span>\s*High[\s\S]*5\.00[\s\S]*Quick feet/);
+  assert.match(detail.text, /Rv, Bravo<\/a>\s*<span class="tag tag-rejected"[^>]*>disqualified/);
+  assert.doesNotMatch(detail.text, /Rvx, Charlie/);
+  assert.match((await admin.get(`/admin/raters/${roryId}?season=all`)).text, /<th>Season<\/th>/);
+  assert.match((await admin.get('/admin/users')).text, new RegExp(`href="/admin/raters/${roryId}\\?season=all">2 ratings`));
+
+  // Admins only
+  assert.strictEqual((await rater.get('/admin/raters')).status, 403);
+  assert.strictEqual((await rater.get(`/admin/raters/${roryId}`)).status, 403);
+  assert.strictEqual((await admin.get('/admin/raters/999999')).status, 404);
+});

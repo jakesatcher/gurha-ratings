@@ -670,3 +670,6 @@ h2 { text-transform: uppercase; font-weight: 600; }
 .hp-field { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
 .contest-message { margin: .5rem 0 .75rem; padding: .6rem .9rem; background: var(--surface-2); border-left: 4px solid var(--brand-2); border-radius: 6px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .contest h2 { margin: 0; font-size: 1.1rem; }
+.season-filter { margin: 0 0 .75rem; max-width: 26rem; }
+.season-filter label { margin: 0; font-weight: 600; }
+.row-muted td { opacity: .6; }

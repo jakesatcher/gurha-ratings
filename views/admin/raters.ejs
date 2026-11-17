@@ -1,0 +1,21 @@
+<%- include('../partials/head') %>
+<h1>Raters</h1>
+<%- include('_nav') %>
+<%- include('_season-filter') %>
+<p class="muted small">Everyone who can rate, plus anyone who has rated. Click a rater to see the players they rated.</p>
+<div class="table-wrap"><table class="table">
+  <thead><tr><th>Rater</th><th>Role</th><th class="num">Players rated</th><th class="num">Disqualified</th><th>Last rated</th></tr></thead>
+  <tbody>
+    <% raters.forEach(function (u) { %>
+      <tr>
+        <td><a href="/admin/raters/<%= u.id %><%= filterSeason.id ? `?season=${filterSeason.id}` : '?season=all' %>"><strong><%= u.name %></strong></a>
+          <div class="small muted"><%= u.email || 'paper rater, no email' %></div></td>
+        <td><span class="tag"><%= u.can_login ? u.role : 'paper' %></span><% if (u.status !== 'approved') { %> <span class="tag tag-<%= u.status %>"><%= u.status %></span><% } %></td>
+        <td class="num"><%= u.ratings %><% if (u.paper) { %> <span class="small muted">(<%= u.paper %> paper)</span><% } %></td>
+        <td class="num"><%= u.disqualified || '' %></td>
+        <td class="small nowrap"><%= u.last_rated ? fmtDate(u.last_rated) : '—' %></td>
+      </tr>
+    <% }) %>
+  </tbody>
+</table></div>
+<%- include('../partials/foot') %>

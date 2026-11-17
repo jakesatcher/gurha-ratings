@@ -1,0 +1,8 @@
+<form method="get" class="inline-form season-filter">
+  <label for="season-filter">Season</label>
+  <select id="season-filter" name="season" data-autosubmit>
+    <option value="all" <%= filterSeason.id === null ? 'selected' : '' %>>All seasons</option>
+    <% allSeasons.forEach(function (s) { %><option value="<%= s.id %>" <%= filterSeason.id === s.id ? 'selected' : '' %>><%= s.name %></option><% }) %>
+  </select>
+  <noscript><button class="btn btn-small" type="submit">Show</button></noscript>
+</form>

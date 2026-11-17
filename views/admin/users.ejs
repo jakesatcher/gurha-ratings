@@ -28,7 +28,7 @@
       Requested <%= fmtDate(u.created_at) %>
       <% if (u.approved_at) { %> · approved <%= fmtDate(u.approved_at) %><%= u.approved_by_name ? ` by ${u.approved_by_name}` : '' %><% } %>
       · 2-step: <%= u.mfa_method === 'totp' ? 'authenticator' : u.mfa_method === 'email' ? 'email' : 'not set up' %>
-      · <%= u.rating_count %> rating<%= u.rating_count === 1 ? '' : 's' %>
+      · <a href="/admin/raters/<%= u.id %>?season=all"><%= u.rating_count %> rating<%= u.rating_count === 1 ? '' : 's' %></a>
       <% if (u.last_login_at) { %> · last sign-in <%= fmtDate(u.last_login_at) %><% } %>
     </p>
     <div class="actions">

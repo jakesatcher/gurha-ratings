@@ -26,6 +26,7 @@ router.use(require('./admin-seasons'));
 router.use(require('./admin-people'));
 router.use(require('./admin-email'));
 router.use(require('./admin-paper'));
+router.use(require('./admin-raters'));
 
 const id = (req) => Number(req.params.id) || 0;
 

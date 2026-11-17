@@ -1,0 +1,32 @@
+<%- include('../partials/head') %>
+<p class="crumbs"><a href="/admin/raters<%= filterSeason.id ? `?season=${filterSeason.id}` : '?season=all' %>">← Raters</a></p>
+<div class="page-head">
+  <div>
+    <h1><%= rater.name %></h1>
+    <p class="muted page-sub"><%= rater.email || 'Paper rater (no account)' %> · <%= rater.can_login ? rater.role : 'paper rater' %> · <%= ratings.length %> player<%= ratings.length === 1 ? '' : 's' %> rated · <%= filterSeason.name %></p>
+  </div>
+</div>
+<%- include('_season-filter') %>
+<% if (!ratings.length) { %>
+  <div class="card"><p class="muted">No ratings<%= filterSeason.id ? ` in ${filterSeason.name}` : '' %>.</p></div>
+<% } else { %>
+<div class="table-wrap"><table class="table">
+  <thead><tr><th>Player</th><th>Team</th><% if (!filterSeason.id) { %><th>Season</th><% } %><th>Rating</th><th class="num">Points</th><th>Rated</th><th>Comments</th></tr></thead>
+  <tbody>
+    <% ratings.forEach(function (r) { const g = r.scores.find(function (s) { return s.category_active; }); %>
+      <tr class="<%= r.disqualified ? 'row-muted' : '' %>">
+        <td><a href="/players/<%= r.player.id %>#rating-<%= r.id %>"><%= r.player.last_name %>, <%= r.player.first_name %></a>
+          <% if (r.disqualified) { %><span class="tag tag-rejected" title="<%= r.disqualified_reason || '' %>">disqualified</span><% } %>
+          <% if (r.source === 'paper') { %><span class="tag">paper<%= r.paper_form_code ? ` ${r.paper_form_code}` : '' %></span><% } %></td>
+        <td class="small"><%= r.player.teams || '—' %></td>
+        <% if (!filterSeason.id) { %><td class="small"><%= r.season_name %></td><% } %>
+        <td class="grade-tag"><% if (g && g.gradeInfo) { %><%- include('../partials/level', { level: g.gradeInfo.level }) %> <%= g.gradeInfo.step ? levels.STEP_NAMES[g.gradeInfo.step] : '' %><% } else { %><%- include('../partials/level', { level: r.calculated_level }) %><% } %></td>
+        <td class="num"><%= fmt(r.overall) %></td>
+        <td class="small nowrap"><%= fmtDate(r.created_at) %></td>
+        <td class="small"><%= r.evidence || '' %></td>
+      </tr>
+    <% }) %>
+  </tbody>
+</table></div>
+<% } %>
+<%- include('../partials/foot') %>
